@@ -1,77 +1,64 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#70ad47">
-  <title>Arbeitszeit Nebenjob</title>
-  <link rel="manifest" href="manifest.json">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Nebenjob">
-  <style>
-    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-    body{margin:0;min-height:100vh;font-family:Arial,sans-serif;color:#25303b;background:#f4f6f8}
-    .app{width:min(100%,560px);margin:0 auto;padding:14px}
-    .card{margin-bottom:14px;padding:22px 20px;background:#fff;border-radius:20px;box-shadow:0 10px 28px rgba(40,54,68,.11)}
-    h1{margin:0 0 6px;text-align:center;font-size:25px}.subtitle{margin:0 0 20px;text-align:center;color:#667085;font-size:14px}
-    label{display:block;margin:16px 0 7px;font-size:16px;font-weight:700}
-    input,select,textarea,button{width:100%;min-height:52px;padding:12px 14px;border:1px solid #d7dde3;border-radius:12px;background:#fff;color:#25303b;font-size:18px}
-    textarea{min-height:82px;resize:vertical}input:disabled,select:disabled{background:#f0f2f4;color:#929aa3}
-    .hidden{display:none}.button-row{display:grid;grid-template-columns:1fr;gap:10px;margin-top:24px}.button-row.edit-mode{grid-template-columns:1fr 1fr}
-    .button-row button{border:0;color:#fff;font-weight:700;cursor:pointer}#saveButton,#updateButton{background:#70ad47}#deleteButton{background:#c94c4c}#cancelButton{background:#7b8794}
-    .secondary-row{display:none;grid-column:1/-1}.edit-mode .secondary-row{display:block}
-    #meldung{min-height:24px;margin-top:15px;text-align:center;font-weight:700}.success{color:#337a19}.error{color:#b42318}
-    details.card{padding:0;overflow:hidden}details.card>summary{position:relative;display:flex;align-items:center;min-height:64px;padding:18px 54px 18px 20px;list-style:none;font-size:19px;font-weight:700;cursor:pointer}
-    details.card>summary::-webkit-details-marker{display:none}details.card>summary::after{content:"⌄";position:absolute;right:20px;top:50%;transform:translateY(-55%);font-size:25px}details.card[open]>summary::after{transform:translateY(-45%) rotate(180deg)}
-    .content{padding:0 20px 22px}.calendar-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}.calendar-head button{width:44px;min-height:42px;padding:0;font-size:22px;font-weight:700}
-    #monthLabel{flex:1;text-align:center;font-size:18px;font-weight:700;text-transform:capitalize}.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
-    .day-name{text-align:center;font-size:12px;font-weight:700;color:#667085}.day-cell{min-height:51px;padding:6px 2px;border:1px solid #dce2e7;border-radius:10px;text-align:center;font-size:13px;cursor:pointer}
-    .day-cell.empty{visibility:hidden}.day-cell.today{box-shadow:inset 0 0 0 2px #4a90e2}.day-cell.selected{outline:3px solid #20252b}
-    .day-number{display:block;font-weight:700}.status-label{display:block;margin-top:3px;font-size:9px;font-weight:700;line-height:1.05}.status-offen{background:#f7f8fa;color:#667085}.status-arbeit{background:#dceeff;color:#174f78}.status-abwesenheit{background:#dff3d2;color:#35651c}
-    .week-box{margin-bottom:16px;padding:14px;border-radius:14px;background:#eef3f7;text-align:center}.week-box strong{display:block;font-size:17px}.week-box span{display:block;margin-top:5px;font-size:14px}
-    .stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.stat-card{padding:14px 10px;border-radius:12px;background:#f7f8fa;text-align:center;border:1px solid #e3e7eb}
-    .stat-value{display:block;font-size:22px;font-weight:700}.stat-label{display:block;margin-top:4px;font-size:12px;color:#667085;font-weight:700}.plus{color:#337a19}.minus{color:#b42318}
-    @media(max-width:420px){.app{padding:8px}.card{padding:18px 14px}.calendar-grid{gap:4px}.day-cell{min-height:46px}}
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#70ad47">
+<title>Arbeitszeit Nebenjob</title>
+<link rel="manifest" href="manifest.json">
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f6f8;font-family:Arial,sans-serif;color:#25303b}
+.app{width:min(100%,560px);margin:auto;padding:14px}.card{background:#fff;border-radius:20px;padding:22px 20px;margin-bottom:14px;box-shadow:0 10px 28px rgba(40,54,68,.11)}
+h1{text-align:center;margin:0 0 6px;font-size:25px}.subtitle{text-align:center;margin:0 0 20px;color:#667085}
+label{display:block;margin:16px 0 7px;font-weight:700}input,select,textarea,button{width:100%;min-height:52px;padding:12px 14px;border:1px solid #d7dde3;border-radius:12px;background:#fff;font-size:18px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.hidden{display:none}.hours-box{margin-top:14px;padding:14px;border-radius:12px;background:#eef3f7;text-align:center;font-weight:700}
+.button-row{display:grid;gap:10px;margin-top:24px}.button-row.edit-mode{grid-template-columns:1fr 1fr}.button-row button{border:0;color:white;font-weight:700}
+#saveButton,#updateButton{background:#70ad47}#deleteButton{background:#c94c4c}#cancelButton{background:#7b8794}.secondary-row{display:none;grid-column:1/-1}.edit-mode .secondary-row{display:block}
+#meldung{text-align:center;min-height:24px;margin-top:14px;font-weight:700}.success{color:#337a19}.error{color:#b42318}
+details.card{padding:0;overflow:hidden}summary{padding:18px 20px;font-size:19px;font-weight:700;cursor:pointer}.content{padding:0 20px 22px}
+.calendar-head{display:flex;align-items:center;gap:10px}.calendar-head button{width:44px;padding:0}.calendar-head div{flex:1;text-align:center;font-weight:700}
+.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:14px}.day-name{text-align:center;font-size:12px;font-weight:700}.day-cell{min-height:48px;padding:5px 2px;border:1px solid #dce2e7;border-radius:10px}.empty{visibility:hidden}.today{box-shadow:inset 0 0 0 2px #4a90e2}.selected{outline:3px solid #20252b}.status-arbeit{background:#dceeff}.status-abwesenheit{background:#dff3d2}.day-number{display:block;font-weight:700}.status-label{display:block;font-size:9px;margin-top:3px}
+.week-box{padding:14px;background:#eef3f7;border-radius:14px;text-align:center;margin-bottom:14px}.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}.stat{padding:14px;background:#f7f8fa;border:1px solid #e3e7eb;border-radius:12px;text-align:center}.stat strong{font-size:22px;display:block}.plus{color:#337a19}.minus{color:#b42318}
+@media(max-width:420px){.app{padding:8px}.row{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
 <main class="app">
-  <section class="card">
-    <h1>Arbeitszeit Nebenjob</h1>
-    <p class="subtitle">6 Sollstunden pro Woche</p>
-    <form id="entryForm" novalidate>
-      <label for="datum">Datum</label><input type="date" id="datum" required>
-      <label for="taetigkeit">Tätigkeit</label>
-      <select id="taetigkeit"><option value="">Bitte wählen</option></select>
-      <div id="freieTaetigkeitBox" class="hidden">
-        <label for="freieTaetigkeit">Freie Tätigkeit</label>
-        <input type="text" id="freieTaetigkeit" maxlength="100" placeholder="Tätigkeit eintragen">
-      </div>
-      <label for="stunden">Gearbeitete Stunden</label>
-      <input type="number" id="stunden" step="0.25" min="0.25" max="24" inputmode="decimal">
-      <label for="abwesenheit">Abwesenheit</label>
-      <select id="abwesenheit"><option value="">Keine</option><option>Urlaub</option><option>Krank</option><option>Feiertag</option></select>
-      <label for="notiz">Notiz (optional)</label><textarea id="notiz"></textarea>
-      <div id="buttonRow" class="button-row">
-        <button type="submit" id="saveButton">Speichern</button>
-        <button type="button" id="updateButton" hidden>Ändern</button>
-        <button type="button" id="deleteButton" hidden>Löschen</button>
-        <div class="secondary-row"><button type="button" id="cancelButton">Bearbeitung abbrechen</button></div>
-      </div>
-      <div id="meldung" aria-live="polite"></div>
-    </form>
-  </section>
-  <details class="card" open><summary>Kalender</summary><div class="content">
-    <div id="weekBox" class="week-box"></div>
-    <div class="calendar-head"><button type="button" id="prevMonth">‹</button><div id="monthLabel"></div><button type="button" id="nextMonth">›</button></div>
-    <div id="calendarGrid" class="calendar-grid"></div>
-  </div></details>
-  <details class="card" open><summary>Zeitkonto</summary><div class="content"><div class="stats-grid">
-    <div class="stat-card"><span id="statStunden" class="stat-value">0</span><span class="stat-label">Stunden im Monat</span></div>
-    <div class="stat-card"><span id="statGesamtSaldo" class="stat-value">0</span><span class="stat-label">Gesamtsaldo</span></div>
-  </div></div></details>
+<section class="card">
+<h1>Arbeitszeit Nebenjob</h1>
+<p class="subtitle">6 Sollstunden pro Woche</p>
+<form id="entryForm">
+<label for="datum">Datum</label><input type="date" id="datum" required>
+<label for="taetigkeit">Tätigkeit</label>
+<select id="taetigkeit"><option value="">Bitte wählen</option></select>
+<div id="freieBox" class="hidden"><label for="freieTaetigkeit">Freie Tätigkeit</label><input id="freieTaetigkeit" type="text"></div>
+<div class="row">
+<div><label for="beginn">Beginn</label><input type="time" id="beginn" value="07:00"></div>
+<div><label for="ende">Ende</label><input type="time" id="ende" value="13:00"></div>
+</div>
+<div class="hours-box">Berechnete Stunden: <span id="stundenAnzeige">6</span></div>
+<label for="abwesenheit">Abwesenheit</label>
+<select id="abwesenheit"><option value="">Keine</option><option>Urlaub</option><option>Krank</option></select>
+<label for="notiz">Notiz (optional)</label><textarea id="notiz"></textarea>
+<div id="buttonRow" class="button-row">
+<button id="saveButton" type="submit">Speichern</button>
+<button id="updateButton" type="button" hidden>Ändern</button>
+<button id="deleteButton" type="button" hidden>Löschen</button>
+<div class="secondary-row"><button id="cancelButton" type="button">Bearbeitung abbrechen</button></div>
+</div>
+<div id="meldung"></div>
+</form>
+</section>
+<details class="card" open><summary>Kalender</summary><div class="content">
+<div id="weekBox" class="week-box"></div>
+<div class="calendar-head"><button id="prevMonth" type="button">‹</button><div id="monthLabel"></div><button id="nextMonth" type="button">›</button></div>
+<div id="calendarGrid" class="calendar-grid"></div>
+</div></details>
+<details class="card" open><summary>Zeitkonto</summary><div class="content"><div class="stats">
+<div class="stat"><strong id="statStunden">0</strong><span>Stunden im Monat</span></div>
+<div class="stat"><strong id="statSaldo">0</strong><span>Gesamtsaldo</span></div>
+</div></div></details>
 </main>
-<script src="app.js?v=2"></script>
-<script>if("serviceWorker"in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./service-worker.js").catch(console.error));}</script>
-</body>
-</html>
+<script src="app.js?v=3"></script>
+<script>if("serviceWorker"in navigator){navigator.serviceWorker.register("./service-worker.js").catch(console.error)}</script>
+</body></html>
