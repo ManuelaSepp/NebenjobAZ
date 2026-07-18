@@ -1,4 +1,4 @@
-const SCRIPT_URL="https://script.google.com/macros/s/AKfycbzpO6euL2RpDOZ1ZNab3cGvkyO-P38juCWLGrvVCRfhT9iQ6qC688Hxp6OBwQd_G6PQsA/exec";
+const SCRIPT_URL="https://script.google.com/macros/s/AKfycbzKK0n1cfQnNY_VQ-G6vSFveHqMiXaZ3sL2dZWVDUKx2XMw2ZtjliDurWSZPn8nomocWA/exec";
 const $=id=>document.getElementById(id),state={eintraege:[],taetigkeiten:[],kalenderDatum:new Date(),ausgewaehlt:null,originalDatum:null,soll:6,saldo:0};
 const form=$("entryForm"),datum=$("datum"),taetigkeit=$("taetigkeit"),freieBox=$("freieBox"),freieTaetigkeit=$("freieTaetigkeit"),beginn=$("beginn"),ende=$("ende"),abwesenheit=$("abwesenheit"),notiz=$("notiz"),meldung=$("meldung");
 const save=$("saveButton"),update=$("updateButton"),del=$("deleteButton"),cancel=$("cancelButton"),buttonRow=$("buttonRow");
