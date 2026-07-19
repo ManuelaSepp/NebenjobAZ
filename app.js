@@ -310,7 +310,7 @@ function renderKalender(){
     b.type="button";
     b.className="day-cell "+(e?(e.abwesenheit?"status-abwesenheit":"status-arbeit"):"")+(i===iso(new Date())?" today":"")+(i===state.ausgewaehlt?" selected":"");
     b.innerHTML=`<span class="day-number">${t}</span><span class="status-label">${e?(e.abwesenheit||format(e.stunden)+" h"):""}</span>`;
-    if(e){
+    if(e && i!==state.ausgewaehlt){
       const tooltipText=tooltipFuerEintrag(e);
       b.title=tooltipText.replace(/\n/g," | ");
       b.addEventListener("mouseenter",event=>tooltipZeigen(event.currentTarget,tooltipText));
