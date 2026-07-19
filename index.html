@@ -11,6 +11,10 @@
 .app{width:min(100%,560px);margin:auto;padding:14px}.card{background:#fff;border-radius:20px;padding:22px 20px;margin-bottom:14px;box-shadow:0 10px 28px rgba(40,54,68,.11)}
 h1{text-align:center;margin:0 0 6px;font-size:25px}.subtitle{text-align:center;margin:0 0 20px;color:#667085}
 label{display:block;margin:16px 0 7px;font-weight:700}input,select,textarea,button{width:100%;min-height:52px;padding:12px 14px;border:1px solid #d7dde3;border-radius:12px;background:#fff;font-size:18px}
+.multi-select{display:grid;gap:8px;padding:10px;border:1px solid #d7dde3;border-radius:12px;background:#fff}
+.activity-option{display:flex;align-items:center;gap:10px;min-height:44px;margin:0;padding:8px 10px;border-radius:9px;font-weight:400}
+.activity-option:hover{background:#f4f6f8}.activity-option input{width:22px;min-height:22px;margin:0;padding:0;flex:0 0 auto}
+.multi-select.disabled{opacity:.55;pointer-events:none}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.hidden{display:none}.hours-box{margin-top:14px;padding:14px;border-radius:12px;background:#eef3f7;text-align:center;font-weight:700}
 .button-row{display:grid;gap:10px;margin-top:24px}.button-row.edit-mode{grid-template-columns:1fr 1fr}.button-row button{border:0;color:white;font-weight:700}
 #saveButton,#updateButton{background:#70ad47}#deleteButton{background:#c94c4c}#cancelButton{background:#7b8794}.secondary-row{display:none;grid-column:1/-1}.edit-mode .secondary-row{display:block}
@@ -29,9 +33,9 @@ details.card{padding:0;overflow:hidden}summary{padding:18px 20px;font-size:19px;
 <p class="subtitle">6 Sollstunden pro Woche</p>
 <form id="entryForm">
 <label for="datum">Datum</label><input type="date" id="datum" required>
-<label for="taetigkeit">Tätigkeit</label>
-<select id="taetigkeit"><option value="">Bitte wählen</option></select>
-<div id="freieBox" class="hidden"><label for="freieTaetigkeit">Freie Tätigkeit</label><input id="freieTaetigkeit" type="text"></div>
+<label>Tätigkeiten</label>
+<div id="taetigkeitenListe" class="multi-select"></div>
+<div id="freieBox" class="hidden"><label for="freieTaetigkeit">Weitere Tätigkeit</label><input id="freieTaetigkeit" type="text" placeholder="Weitere Tätigkeit eintragen"></div>
 <div class="row">
 <div><label for="beginn">Beginn</label><input type="time" id="beginn" value="07:00"></div>
 <div><label for="ende">Ende</label><input type="time" id="ende" value="13:00"></div>
@@ -59,6 +63,6 @@ details.card{padding:0;overflow:hidden}summary{padding:18px 20px;font-size:19px;
 <div class="stat"><strong id="statSaldo">0</strong><span>Gesamtsaldo</span></div>
 </div></div></details>
 </main>
-<script src="app.js?v=3"></script>
+<script src="app.js?v=4"></script>
 <script>if("serviceWorker"in navigator){navigator.serviceWorker.register("./service-worker.js").catch(console.error)}</script>
 </body></html>
