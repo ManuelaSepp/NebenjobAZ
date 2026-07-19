@@ -320,6 +320,7 @@ function renderKalender(){
       b.addEventListener("blur",tooltipAusblenden);
     }
     b.onclick=()=>{
+      tooltipAusblenden();
       state.ausgewaehlt=i;
       datum.value=i;
       e?eintragLaden(e):resetForm(false);
