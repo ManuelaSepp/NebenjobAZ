@@ -23,6 +23,8 @@ datum.onchange=datumGeaendert;
 
 async function init(){
   datum.value=iso(new Date());
+  beginn.value="07:00";
+  ende.value="13:00";
   state.ausgewaehlt=datum.value;
   state.kalenderDatum=ausIso(datum.value);
   stundenBerechnen();
