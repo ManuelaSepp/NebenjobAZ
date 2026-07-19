@@ -310,6 +310,15 @@ function renderKalender(){
     b.type="button";
     b.className="day-cell "+(e?(e.abwesenheit?"status-abwesenheit":"status-arbeit"):"")+(i===iso(new Date())?" today":"")+(i===state.ausgewaehlt?" selected":"");
     b.innerHTML=`<span class="day-number">${t}</span><span class="status-label">${e?(e.abwesenheit||format(e.stunden)+" h"):""}</span>`;
+    if(e){
+      const tooltipText=tooltipFuerEintrag(e);
+      b.title=tooltipText.replace(/\n/g," | ");
+      b.addEventListener("mouseenter",event=>tooltipZeigen(event.currentTarget,tooltipText));
+      b.addEventListener("mousemove",event=>tooltipPositionieren(event.clientX,event.clientY));
+      b.addEventListener("mouseleave",tooltipAusblenden);
+      b.addEventListener("focus",event=>tooltipZeigen(event.currentTarget,tooltipText));
+      b.addEventListener("blur",tooltipAusblenden);
+    }
     b.onclick=()=>{
       state.ausgewaehlt=i;
       datum.value=i;
@@ -321,6 +330,53 @@ function renderKalender(){
     };
     g.appendChild(b);
   }
+}
+
+function tooltipFuerEintrag(e){
+  const zeilen=[];
+  const datumText=ausIso(e.datum).toLocaleDateString("de-DE",{weekday:"long",day:"2-digit",month:"2-digit",year:"numeric"});
+  zeilen.push(datumText);
+
+  if(e.abwesenheit){
+    zeilen.push(e.abwesenheit+": "+format(e.stunden||state.soll)+" Stunden");
+  }else{
+    if(e.taetigkeit)zeilen.push("Tätigkeit: "+e.taetigkeit);
+    if(e.beginn||e.ende)zeilen.push("Zeit: "+(e.beginn||"–")+" bis "+(e.ende||"–")+" Uhr");
+    zeilen.push("Stunden: "+format(e.stunden)+" h");
+  }
+
+  if(e.notiz)zeilen.push("Notiz: "+e.notiz);
+  return zeilen.join("\n");
+}
+
+function tooltipZeigen(element,text){
+  const tooltip=$("calendarTooltip");
+  if(!tooltip)return;
+  tooltip.textContent=text;
+  tooltip.classList.add("visible");
+  const r=element.getBoundingClientRect();
+  tooltipPositionieren(r.left+r.width/2,r.top);
+}
+
+function tooltipPositionieren(x,y){
+  const tooltip=$("calendarTooltip");
+  if(!tooltip||!tooltip.classList.contains("visible"))return;
+  const abstand=12;
+  const breite=tooltip.offsetWidth;
+  const hoehe=tooltip.offsetHeight;
+  let links=x-breite/2;
+  let oben=y-hoehe-abstand;
+
+  links=Math.max(8,Math.min(links,window.innerWidth-breite-8));
+  if(oben<8)oben=y+abstand;
+
+  tooltip.style.left=links+"px";
+  tooltip.style.top=oben+"px";
+}
+
+function tooltipAusblenden(){
+  const tooltip=$("calendarTooltip");
+  if(tooltip)tooltip.classList.remove("visible");
 }
 
 function renderWoche(){
