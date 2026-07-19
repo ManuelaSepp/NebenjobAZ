@@ -1,5 +1,5 @@
 const SCRIPT_URL="https://script.google.com/macros/s/AKfycbzKK0n1cfQnNY_VQ-G6vSFveHqMiXaZ3sL2dZWVDUKx2XMw2ZtjliDurWSZPn8nomocWA/exec";
-const $=id=>document.getElementById(id),state={eintraege:[],taetigkeiten:[],kalenderDatum:new Date(),ausgewaehlt:null,originalDatum:null,soll:6,saldo:0};
+const $=id=>document.getElementById(id),state={eintraege:[],taetigkeiten:[],kalenderDatum:new Date(),ausgewaehlt:null,originalDatum:null,soll:6,saldo:0,tooltipBlockDatum:null};
 const form=$("entryForm"),datum=$("datum"),taetigkeitenDropdown=$("taetigkeitenDropdown"),taetigkeitenButton=$("taetigkeitenButton"),taetigkeitenListe=$("taetigkeitenListe"),freieBox=$("freieBox"),freieTaetigkeit=$("freieTaetigkeit"),beginn=$("beginn"),ende=$("ende"),abwesenheit=$("abwesenheit"),notiz=$("notiz"),meldung=$("meldung");
 const save=$("saveButton"),update=$("updateButton"),del=$("deleteButton"),cancel=$("cancelButton"),buttonRow=$("buttonRow");
 
@@ -308,19 +308,29 @@ function renderKalender(){
   for(let t=1;t<=last.getDate();t++){
     const dt=new Date(y,m,t),i=iso(dt),e=map.get(i),b=document.createElement("button");
     b.type="button";
+    b.dataset.datum=i;
     b.className="day-cell "+(e?(e.abwesenheit?"status-abwesenheit":"status-arbeit"):"")+(i===iso(new Date())?" today":"")+(i===state.ausgewaehlt?" selected":"");
     b.innerHTML=`<span class="day-number">${t}</span><span class="status-label">${e?(e.abwesenheit||format(e.stunden)+" h"):""}</span>`;
-    if(e && i!==state.ausgewaehlt){
+    if(e){
       const tooltipText=tooltipFuerEintrag(e);
       b.title=tooltipText.replace(/\n/g," | ");
-      b.addEventListener("mouseenter",event=>tooltipZeigen(event.currentTarget,tooltipText));
-      b.addEventListener("mousemove",event=>tooltipPositionieren(event.clientX,event.clientY));
-      b.addEventListener("mouseleave",tooltipAusblenden);
-      b.addEventListener("focus",event=>tooltipZeigen(event.currentTarget,tooltipText));
-      b.addEventListener("blur",tooltipAusblenden);
+      b.addEventListener("mouseenter",event=>{
+        if(state.tooltipBlockDatum===i)return;
+        tooltipZeigen(event.currentTarget,tooltipText);
+      });
+      b.addEventListener("mousemove",event=>{
+        if(state.tooltipBlockDatum===i)return;
+        tooltipPositionieren(event.clientX,event.clientY);
+      });
+      b.addEventListener("mouseleave",()=>{
+        if(state.tooltipBlockDatum===i)state.tooltipBlockDatum=null;
+        tooltipAusblenden();
+      });
     }
     b.onclick=()=>{
+      state.tooltipBlockDatum=i;
       tooltipAusblenden();
+      b.blur();
       state.ausgewaehlt=i;
       datum.value=i;
       e?eintragLaden(e):resetForm(false);
@@ -379,6 +389,15 @@ function tooltipAusblenden(){
   const tooltip=$("calendarTooltip");
   if(tooltip)tooltip.classList.remove("visible");
 }
+
+document.addEventListener("mousemove",event=>{
+  if(!state.tooltipBlockDatum)return;
+  const tag=event.target.closest?.(".day-cell");
+  const datumTag=tag?.dataset?.datum;
+  if(datumTag!==state.tooltipBlockDatum){
+    state.tooltipBlockDatum=null;
+  }
+});
 
 function renderWoche(){
   const d=ausIso(state.ausgewaehlt||datum.value),kw=isoWoche(d),jahr=isoJahr(d);
