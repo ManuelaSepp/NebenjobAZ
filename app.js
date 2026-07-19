@@ -1,10 +1,16 @@
 const SCRIPT_URL="https://script.google.com/macros/s/AKfycbzKK0n1cfQnNY_VQ-G6vSFveHqMiXaZ3sL2dZWVDUKx2XMw2ZtjliDurWSZPn8nomocWA/exec";
 const $=id=>document.getElementById(id),state={eintraege:[],taetigkeiten:[],kalenderDatum:new Date(),ausgewaehlt:null,originalDatum:null,soll:6,saldo:0};
-const form=$("entryForm"),datum=$("datum"),taetigkeitenListe=$("taetigkeitenListe"),freieBox=$("freieBox"),freieTaetigkeit=$("freieTaetigkeit"),beginn=$("beginn"),ende=$("ende"),abwesenheit=$("abwesenheit"),notiz=$("notiz"),meldung=$("meldung");
+const form=$("entryForm"),datum=$("datum"),taetigkeitenDropdown=$("taetigkeitenDropdown"),taetigkeitenButton=$("taetigkeitenButton"),taetigkeitenListe=$("taetigkeitenListe"),freieBox=$("freieBox"),freieTaetigkeit=$("freieTaetigkeit"),beginn=$("beginn"),ende=$("ende"),abwesenheit=$("abwesenheit"),notiz=$("notiz"),meldung=$("meldung");
 const save=$("saveButton"),update=$("updateButton"),del=$("deleteButton"),cancel=$("cancelButton"),buttonRow=$("buttonRow");
 
 window.onload=init;
 form.onsubmit=speichern;
+taetigkeitenButton.onclick=()=>taetigkeitenDropdown.classList.toggle("open");
+document.addEventListener("click",e=>{
+  if(!taetigkeitenDropdown.contains(e.target)){
+    taetigkeitenDropdown.classList.remove("open");
+  }
+});
 update.onclick=aktualisieren;
 del.onclick=loeschen;
 cancel.onclick=()=>resetForm();
@@ -60,12 +66,20 @@ function freieOptionAktiv(){
 function handleTaetigkeiten(){
   freieBox.classList.toggle("hidden",!freieOptionAktiv());
   if(!freieOptionAktiv())freieTaetigkeit.value="";
+  aktualisiereTaetigkeitenAnzeige();
+}
+
+function aktualisiereTaetigkeitenAnzeige(){
+  const werte=ausgewaehlteTaetigkeiten();
+  taetigkeitenButton.textContent=werte.length?werte.join(", "):"Bitte wählen";
 }
 
 function handleAbwesenheit(){
   const x=!!abwesenheit.value;
 
   taetigkeitenListe.classList.toggle("disabled",x);
+  taetigkeitenButton.disabled=x;
+  if(x)taetigkeitenDropdown.classList.remove("open");
   taetigkeitenListe.querySelectorAll('input[type="checkbox"]').forEach(input=>{
     input.disabled=x;
     if(x)input.checked=false;
@@ -103,6 +117,7 @@ function renderListe(){
   });
 
   handleTaetigkeiten();
+  aktualisiereTaetigkeitenAnzeige();
 }
 
 function taetigkeitenSetzen(text){
@@ -256,6 +271,7 @@ function resetForm(heute=true){
     state.ausgewaehlt=datum.value;
   }
 
+  taetigkeitenDropdown.classList.remove("open");
   handleTaetigkeiten();
   handleAbwesenheit();
   stundenBerechnen();
