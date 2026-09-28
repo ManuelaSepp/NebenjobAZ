@@ -1,5 +1,7 @@
 const SCRIPT_URL="https://script.google.com/macros/s/AKfycbzKK0n1cfQnNY_VQ-G6vSFveHqMiXaZ3sL2dZWVDUKx2XMw2ZtjliDurWSZPn8nomocWA/exec";
 const $=id=>document.getElementById(id),state={eintraege:[],taetigkeiten:[],kalenderDatum:new Date(),ausgewaehlt:null,originalDatum:null,soll:6,saldo:0,monatSoll:0,monatHaben:0,monatSaldo:0,jahresSaldo:0,saldoJahr:new Date().getFullYear(),tooltipBlockDatum:null};
+let ladeSequenz=0;
+let jsonpSequenz=0;
 const form=$("entryForm"),datum=$("datum"),taetigkeitenDropdown=$("taetigkeitenDropdown"),taetigkeitenButton=$("taetigkeitenButton"),taetigkeitenListe=$("taetigkeitenListe"),freieBox=$("freieBox"),freieTaetigkeit=$("freieTaetigkeit"),beginn=$("beginn"),ende=$("ende"),abwesenheit=$("abwesenheit"),notiz=$("notiz"),meldung=$("meldung");
 const save=$("saveButton"),update=$("updateButton"),del=$("deleteButton"),cancel=$("cancelButton"),buttonRow=$("buttonRow");
 
@@ -214,20 +216,29 @@ function validiere(d){
   return"";
 }
 
-async function laden(){
+async function laden(jahr,monat){
   const r=await jsonp({
     action:"init",
-    jahr:state.kalenderDatum.getFullYear(),
-    monat:state.kalenderDatum.getMonth()+1
+    jahr,
+    monat
   });
   if(!r.ok)throw new Error(r.message);
   return r;
 }
 
 async function ladeMonat(){
+  const meineSequenz=++ladeSequenz;
+  const jahr=state.kalenderDatum.getFullYear();
+  const monat=state.kalenderDatum.getMonth()+1;
+
+  setMonatsNavigationGesperrt(true);
+
   try{
     zeige("Lade Daten ...","");
-    const r=await laden();
+    const r=await laden(jahr,monat);
+
+    if(meineSequenz!==ladeSequenz)return;
+
     state.eintraege=r.eintraege||[];
     state.taetigkeiten=r.taetigkeiten||[];
     state.soll=Number(r.sollstunden)||6;
@@ -236,7 +247,8 @@ async function ladeMonat(){
     state.monatHaben=Number(r.monatHaben)||0;
     state.monatSaldo=Number(r.monatSaldo)||0;
     state.jahresSaldo=Number(r.jahresSaldo)||0;
-    state.saldoJahr=Number(r.saldoJahr)||state.kalenderDatum.getFullYear();
+    state.saldoJahr=Number(r.saldoJahr)||jahr;
+
     renderListe();
     renderKalender();
     renderWoche();
@@ -244,8 +256,19 @@ async function ladeMonat(){
     renderStatistik();
     zeige("","");
   }catch(e){
-    zeige("Fehler: "+e.message,"error");
+    if(meineSequenz===ladeSequenz){
+      zeige("Fehler: "+e.message,"error");
+    }
+  }finally{
+    if(meineSequenz===ladeSequenz){
+      setMonatsNavigationGesperrt(false);
+    }
   }
+}
+
+function setMonatsNavigationGesperrt(gesperrt){
+  $("prevMonth").disabled=gesperrt;
+  $("nextMonth").disabled=gesperrt;
 }
 
 async function speichern(e){
@@ -485,6 +508,8 @@ async function datumGeaendert(){
 }
 
 async function monatWechseln(r){
+  if($("prevMonth").disabled||$("nextMonth").disabled)return;
+
   state.kalenderDatum=new Date(
     state.kalenderDatum.getFullYear(),
     state.kalenderDatum.getMonth()+r,
@@ -492,13 +517,15 @@ async function monatWechseln(r){
   );
   state.ausgewaehlt=iso(state.kalenderDatum);
   datum.value=state.ausgewaehlt;
+
   await ladeMonat();
 }
 
 function jsonp(p){
   return new Promise((res,rej)=>{
-    const cb="nebenjobCallback";
+    const cb="nebenjobCallback_"+Date.now()+"_"+(++jsonpSequenz);
     const s=document.createElement("script");
+
     const t=setTimeout(()=>{
       clean();
       rej(new Error("Zeitüberschreitung"));
@@ -506,7 +533,7 @@ function jsonp(p){
 
     function clean(){
       clearTimeout(t);
-      if(window[cb])delete window[cb];
+      try{delete window[cb]}catch(_){window[cb]=undefined}
       s.remove();
     }
 
@@ -515,7 +542,12 @@ function jsonp(p){
       res(d);
     };
 
-    s.src=SCRIPT_URL+"?"+new URLSearchParams({...p,callback:cb,zeit:Date.now()});
+    s.src=SCRIPT_URL+"?"+new URLSearchParams({
+      ...p,
+      callback:cb,
+      zeit:Date.now()
+    });
+
     s.onerror=()=>{
       clean();
       rej(new Error("Verbindung fehlgeschlagen"));
