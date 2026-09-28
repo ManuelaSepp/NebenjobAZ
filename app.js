@@ -490,14 +490,16 @@ async function monatWechseln(r){
 
 function jsonp(p){
   return new Promise((res,rej)=>{
-    const cb="nebenjob"+Date.now()+Math.random().toString(36).slice(2),s=document.createElement("script"),t=setTimeout(()=>{
+    const cb="nebenjobCallback";
+    const s=document.createElement("script");
+    const t=setTimeout(()=>{
       clean();
       rej(new Error("Zeitüberschreitung"));
     },15000);
 
     function clean(){
       clearTimeout(t);
-      delete window[cb];
+      if(window[cb])delete window[cb];
       s.remove();
     }
 
