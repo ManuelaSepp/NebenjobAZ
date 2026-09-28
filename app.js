@@ -1,5 +1,5 @@
 const SCRIPT_URL="https://script.google.com/macros/s/AKfycbzKK0n1cfQnNY_VQ-G6vSFveHqMiXaZ3sL2dZWVDUKx2XMw2ZtjliDurWSZPn8nomocWA/exec";
-const $=id=>document.getElementById(id),state={eintraege:[],taetigkeiten:[],kalenderDatum:new Date(),ausgewaehlt:null,originalDatum:null,soll:6,saldo:0,monatSoll:0,monatHaben:0,monatSaldo:0,tooltipBlockDatum:null};
+const $=id=>document.getElementById(id),state={eintraege:[],taetigkeiten:[],kalenderDatum:new Date(),ausgewaehlt:null,originalDatum:null,soll:6,saldo:0,monatSoll:0,monatHaben:0,monatSaldo:0,jahresSaldo:0,saldoJahr:new Date().getFullYear(),tooltipBlockDatum:null};
 const form=$("entryForm"),datum=$("datum"),taetigkeitenDropdown=$("taetigkeitenDropdown"),taetigkeitenButton=$("taetigkeitenButton"),taetigkeitenListe=$("taetigkeitenListe"),freieBox=$("freieBox"),freieTaetigkeit=$("freieTaetigkeit"),beginn=$("beginn"),ende=$("ende"),abwesenheit=$("abwesenheit"),notiz=$("notiz"),meldung=$("meldung");
 const save=$("saveButton"),update=$("updateButton"),del=$("deleteButton"),cancel=$("cancelButton"),buttonRow=$("buttonRow");
 
@@ -235,6 +235,8 @@ async function ladeMonat(){
     state.monatSoll=Number(r.monatSoll)||0;
     state.monatHaben=Number(r.monatHaben)||0;
     state.monatSaldo=Number(r.monatSaldo)||0;
+    state.jahresSaldo=Number(r.jahresSaldo)||0;
+    state.saldoJahr=Number(r.saldoJahr)||state.kalenderDatum.getFullYear();
     renderListe();
     renderKalender();
     renderWoche();
@@ -463,6 +465,11 @@ function renderStatistik(){
   $("statStunden").textContent=format(
     state.eintraege.reduce((s,e)=>s+Number(e.stunden||0),0)
   );
+
+  const jahr=$("statJahr");
+  jahr.textContent=vorzeichen(state.jahresSaldo);
+  jahr.className=state.jahresSaldo>0?"plus":state.jahresSaldo<0?"minus":"";
+  $("statJahrLabel").textContent="Jahressaldo "+state.saldoJahr;
 
   const el=$("statSaldo");
   el.textContent=vorzeichen(state.saldo);

@@ -1,8 +1,8 @@
-const CACHE_NAME = "nebenjob-az-v8";
+const CACHE_NAME = "nebenjob-az-v11";
 const APP_ASSETS = [
   "./",
   "./index.html",
-  "./app.js?v=8",
+  "./app.js?v=11",
   "./manifest.json",
   "./icons/favicon-32.png",
   "./icons/apple-touch-icon.png",
@@ -17,13 +17,16 @@ self.addEventListener("install", event => {
 
 self.addEventListener("activate", event => {
   event.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))))
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))
+    )
   );
   self.clients.claim();
 });
 
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
+
   event.respondWith(
     fetch(event.request)
       .then(response => {
@@ -31,6 +34,8 @@ self.addEventListener("fetch", event => {
         caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
         return response;
       })
-      .catch(() => caches.match(event.request).then(cached => cached || caches.match("./index.html")))
+      .catch(() =>
+        caches.match(event.request).then(cached => cached || caches.match("./index.html"))
+      )
   );
 });
