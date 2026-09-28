@@ -16,6 +16,8 @@ del.onclick=loeschen;
 cancel.onclick=()=>resetForm();
 beginn.oninput=stundenBerechnen;
 ende.oninput=stundenBerechnen;
+beginn.addEventListener("blur",()=>zeitFormatieren(beginn));
+ende.addEventListener("blur",()=>zeitFormatieren(ende));
 abwesenheit.onchange=handleAbwesenheit;
 $("prevMonth").onclick=()=>monatWechseln(-1);
 $("nextMonth").onclick=()=>monatWechseln(1);
@@ -23,17 +25,51 @@ datum.onchange=datumGeaendert;
 
 async function init(){
   datum.value=iso(new Date());
-  beginn.value="07:00";
-  ende.value="13:00";
+  beginn.value="";
+  ende.value="";
   state.ausgewaehlt=datum.value;
   state.kalenderDatum=ausIso(datum.value);
   stundenBerechnen();
   await ladeMonat();
 }
 
+function zeitFormatieren(feld){
+  let v=String(feld.value||"").trim();
+
+  if(!v){
+    feld.value="";
+    stundenBerechnen();
+    return;
+  }
+
+  if(/^\d{1,2}:\d{2}$/.test(v)){
+    const[h,m]=v.split(":").map(Number);
+    if(h>=0&&h<=23&&m>=0&&m<=59){
+      feld.value=String(h).padStart(2,"0")+":"+String(m).padStart(2,"0");
+      stundenBerechnen();
+      return;
+    }
+  }
+
+  const nurZahlen=v.replace(/\D/g,"");
+  if(nurZahlen.length===3||nurZahlen.length===4){
+    const z=nurZahlen.padStart(4,"0");
+    const h=Number(z.slice(0,2)),m=Number(z.slice(2,4));
+    if(h>=0&&h<=23&&m>=0&&m<=59){
+      feld.value=String(h).padStart(2,"0")+":"+String(m).padStart(2,"0");
+      stundenBerechnen();
+      return;
+    }
+  }
+
+  stundenBerechnen();
+}
+
 function minuten(t){
   if(!t)return null;
+  if(!/^\d{2}:\d{2}$/.test(t))return null;
   const[a,b]=t.split(":").map(Number);
+  if(a<0||a>23||b<0||b>59)return null;
   return a*60+b;
 }
 
@@ -244,8 +280,8 @@ function eintragLaden(e){
   state.originalDatum=e.datum;
   datum.value=e.datum;
   taetigkeitenSetzen(e.taetigkeit);
-  beginn.value=e.beginn||"07:00";
-  ende.value=e.ende||"13:00";
+  beginn.value=e.beginn||"";
+  ende.value=e.ende||"";
   abwesenheit.value=e.abwesenheit||"";
   notiz.value=e.notiz||"";
   handleAbwesenheit();
@@ -263,8 +299,8 @@ function resetForm(heute=true){
   });
 
   freieTaetigkeit.value="";
-  beginn.value="07:00";
-  ende.value="13:00";
+  beginn.value="";
+  ende.value="";
   abwesenheit.value="";
   notiz.value="";
 
