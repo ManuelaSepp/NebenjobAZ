@@ -1,5 +1,5 @@
 const SCRIPT_URL="https://script.google.com/macros/s/AKfycbzKK0n1cfQnNY_VQ-G6vSFveHqMiXaZ3sL2dZWVDUKx2XMw2ZtjliDurWSZPn8nomocWA/exec";
-const $=id=>document.getElementById(id),state={eintraege:[],taetigkeiten:[],kalenderDatum:new Date(),ausgewaehlt:null,originalDatum:null,soll:6,saldo:0,tooltipBlockDatum:null};
+const $=id=>document.getElementById(id),state={eintraege:[],taetigkeiten:[],kalenderDatum:new Date(),ausgewaehlt:null,originalDatum:null,soll:6,saldo:0,monatSoll:0,monatHaben:0,monatSaldo:0,tooltipBlockDatum:null};
 const form=$("entryForm"),datum=$("datum"),taetigkeitenDropdown=$("taetigkeitenDropdown"),taetigkeitenButton=$("taetigkeitenButton"),taetigkeitenListe=$("taetigkeitenListe"),freieBox=$("freieBox"),freieTaetigkeit=$("freieTaetigkeit"),beginn=$("beginn"),ende=$("ende"),abwesenheit=$("abwesenheit"),notiz=$("notiz"),meldung=$("meldung");
 const save=$("saveButton"),update=$("updateButton"),del=$("deleteButton"),cancel=$("cancelButton"),buttonRow=$("buttonRow");
 
@@ -232,9 +232,13 @@ async function ladeMonat(){
     state.taetigkeiten=r.taetigkeiten||[];
     state.soll=Number(r.sollstunden)||6;
     state.saldo=Number(r.gesamtSaldo)||0;
+    state.monatSoll=Number(r.monatSoll)||0;
+    state.monatHaben=Number(r.monatHaben)||0;
+    state.monatSaldo=Number(r.monatSaldo)||0;
     renderListe();
     renderKalender();
     renderWoche();
+    renderMonat();
     renderStatistik();
     zeige("","");
   }catch(e){
@@ -445,6 +449,14 @@ function renderWoche(){
     .reduce((s,e)=>s+Number(e.anrechenbar||0),0);
 
   $("weekBox").innerHTML=`<strong>Diese Woche: ${format(ist)} von ${format(state.soll)} Stunden</strong><br>Wochensaldo: ${vorzeichen(ist-state.soll)} Stunden`;
+}
+
+function renderMonat(){
+  $("monatSoll").textContent=format(state.monatSoll)+" h";
+  $("monatHaben").textContent=format(state.monatHaben)+" h";
+  const el=$("monatSaldo");
+  el.textContent=vorzeichen(state.monatSaldo)+" h";
+  el.className=state.monatSaldo>0?"plus":state.monatSaldo<0?"minus":"";
 }
 
 function renderStatistik(){
