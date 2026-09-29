@@ -226,6 +226,24 @@ async function laden(jahr,monat){
   return r;
 }
 
+function serverDatenUebernehmen(r,jahr){
+  state.eintraege=r.eintraege||[];
+  state.taetigkeiten=r.taetigkeiten||[];
+  state.soll=Number(r.sollstunden)||6;
+  state.saldo=Number(r.gesamtSaldo)||0;
+  state.monatSoll=Number(r.monatSoll)||0;
+  state.monatHaben=Number(r.monatHaben)||0;
+  state.monatSaldo=Number(r.monatSaldo)||0;
+  state.jahresSaldo=Number(r.jahresSaldo)||0;
+  state.saldoJahr=Number(r.saldoJahr)||jahr;
+
+  renderListe();
+  renderKalender();
+  renderWoche();
+  renderMonat();
+  renderStatistik();
+}
+
 async function ladeMonat(){
   const meineSequenz=++ladeSequenz;
   const jahr=state.kalenderDatum.getFullYear();
@@ -239,21 +257,7 @@ async function ladeMonat(){
 
     if(meineSequenz!==ladeSequenz)return;
 
-    state.eintraege=r.eintraege||[];
-    state.taetigkeiten=r.taetigkeiten||[];
-    state.soll=Number(r.sollstunden)||6;
-    state.saldo=Number(r.gesamtSaldo)||0;
-    state.monatSoll=Number(r.monatSoll)||0;
-    state.monatHaben=Number(r.monatHaben)||0;
-    state.monatSaldo=Number(r.monatSaldo)||0;
-    state.jahresSaldo=Number(r.jahresSaldo)||0;
-    state.saldoJahr=Number(r.saldoJahr)||jahr;
-
-    renderListe();
-    renderKalender();
-    renderWoche();
-    renderMonat();
-    renderStatistik();
+    serverDatenUebernehmen(r,jahr);
     zeige("","");
   }catch(e){
     if(meineSequenz===ladeSequenz){
@@ -295,11 +299,22 @@ async function loeschen(){
 async function aktion(action,payload){
   try{
     zeige("Bitte warten ...","");
-    const r=await jsonp({action,payload:JSON.stringify(payload)});
+
+    const jahr=state.kalenderDatum.getFullYear();
+    const monat=state.kalenderDatum.getMonth()+1;
+
+    const r=await jsonp({
+      action,
+      payload:JSON.stringify(payload),
+      jahr,
+      monat
+    });
+
     if(!r.ok)throw new Error(r.message);
-    zeige(r.message,"success");
+
     resetForm(false);
-    await ladeMonat();
+    serverDatenUebernehmen(r,jahr);
+    zeige(r.message,"success");
   }catch(e){
     zeige("Fehler: "+e.message,"error");
   }
