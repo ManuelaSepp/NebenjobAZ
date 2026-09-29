@@ -388,26 +388,107 @@ function lokalerStandNachAktion(action,payload,alt){
   renderStatistik();
 }
 
+function warten(ms){
+  return new Promise(resolve=>setTimeout(resolve,ms));
+}
+
+async function schreibenPerPost(action,payload){
+  const body=new URLSearchParams({
+    action:action,
+    payload:JSON.stringify(payload),
+    zeit:String(Date.now())
+  });
+
+  await fetch(SCRIPT_URL,{
+    method:"POST",
+    mode:"no-cors",
+    body:body,
+    cache:"no-store"
+  });
+}
+
+function aktionBestaetigt(action,payload,r){
+  const eintraege=r.eintraege||[];
+
+  if(action==="save"){
+    return eintraege.some(e=>e.datum===payload.datum);
+  }
+
+  if(action==="delete"){
+    return !eintraege.some(e=>e.datum===payload.datum);
+  }
+
+  if(action==="update"){
+    return eintraege.some(e=>e.datum===payload.datum);
+  }
+
+  return false;
+}
+
+async function bestaetigeAktion(action,payload){
+  const pruefDatum=
+    action==="delete"
+      ? payload.datum
+      : payload.datum;
+
+  const d=ausIso(pruefDatum);
+  const jahr=d.getFullYear();
+  const monat=d.getMonth()+1;
+
+  let letzterStand=null;
+
+  for(let versuch=0;versuch<6;versuch++){
+    if(versuch>0)await warten(700);
+
+    const r=await laden(jahr,monat);
+    letzterStand=r;
+
+    if(aktionBestaetigt(action,payload,r)){
+      return r;
+    }
+  }
+
+  return letzterStand;
+}
+
 async function aktion(action,payload){
-  const alt=action==="update"
-    ? state.eintraege.find(e=>e.datum===payload.originalDatum)
-    : action==="delete"
-      ? state.eintraege.find(e=>e.datum===payload.datum)
-      : null;
-
   try{
-    zeige("Bitte warten ...","");
+    zeige(
+      action==="delete" ? "Lösche Eintrag ..." : "Speichere Eintrag ...",
+      ""
+    );
 
-    const r=await jsonp({
-      action,
-      payload:JSON.stringify(payload)
-    });
+    await schreibenPerPost(action,payload);
 
-    if(!r.ok)throw new Error(r.message);
+    const r=await bestaetigeAktion(action,payload);
 
-    lokalerStandNachAktion(action,payload,alt);
+    if(!r||!aktionBestaetigt(action,payload,r)){
+      throw new Error(
+        "Die Änderung konnte noch nicht bestätigt werden. Bitte einmal neu laden."
+      );
+    }
+
+    const d=ausIso(action==="delete" ? payload.datum : payload.datum);
+
+    if(
+      d.getFullYear()===state.kalenderDatum.getFullYear() &&
+      d.getMonth()===state.kalenderDatum.getMonth()
+    ){
+      serverDatenUebernehmen(r,d.getFullYear());
+    }else{
+      await ladeMonat();
+    }
+
     resetForm(false);
-    zeige(r.message,"success");
+
+    const text=
+      action==="delete"
+        ? "Eintrag gelöscht ✅"
+        : action==="update"
+          ? "Änderung gespeichert ✅"
+          : "Gespeichert ✅";
+
+    zeige(text,"success");
   }catch(e){
     zeige("Fehler: "+e.message,"error");
   }
