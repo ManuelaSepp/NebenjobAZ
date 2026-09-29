@@ -296,24 +296,117 @@ async function loeschen(){
   await aktion("delete",{datum:state.originalDatum});
 }
 
+function beitragFuerSaldo(e){
+  if(!e||!e.datum)return 0;
+
+  const d=ausIso(e.datum);
+  const heute=new Date();
+  heute.setHours(0,0,0,0);
+
+  if(d>heute)return 0;
+
+  return Number(e.anrechenbar||0);
+}
+
+function lokalerEintragAusPayload(payload){
+  const abw=String(payload.abwesenheit||"");
+
+  return{
+    datum:String(payload.datum||""),
+    taetigkeit:abw?"":String(payload.taetigkeit||""),
+    beginn:abw?"":String(payload.beginn||""),
+    ende:abw?"":String(payload.ende||""),
+    stunden:abw?0:(Number(payload.stunden)||0),
+    abwesenheit:abw,
+    anrechenbar:abw?state.soll:(Number(payload.stunden)||0),
+    notiz:String(payload.notiz||"")
+  };
+}
+
+function monatswerteLokalNeu(){
+  state.monatHaben=state.eintraege.reduce(
+    (sum,e)=>sum+Number(e.anrechenbar||0),
+    0
+  );
+  state.monatSaldo=state.monatHaben-state.monatSoll;
+}
+
+function lokalerStandNachAktion(action,payload,alt){
+  const jahr=state.kalenderDatum.getFullYear();
+  const monat=state.kalenderDatum.getMonth();
+
+  if(action==="delete"){
+    state.eintraege=state.eintraege.filter(
+      e=>e.datum!==payload.datum
+    );
+
+    const altBeitrag=beitragFuerSaldo(alt);
+
+    if(alt&&ausIso(alt.datum).getFullYear()===state.saldoJahr){
+      state.jahresSaldo-=altBeitrag;
+    }
+    state.saldo-=altBeitrag;
+  }else{
+    const neu=lokalerEintragAusPayload(payload);
+
+    if(action==="update"&&alt){
+      state.eintraege=state.eintraege.filter(
+        e=>e.datum!==alt.datum
+      );
+
+      const altBeitrag=beitragFuerSaldo(alt);
+      const neuBeitrag=beitragFuerSaldo(neu);
+
+      if(ausIso(alt.datum).getFullYear()===state.saldoJahr){
+        state.jahresSaldo-=altBeitrag;
+      }
+      if(ausIso(neu.datum).getFullYear()===state.saldoJahr){
+        state.jahresSaldo+=neuBeitrag;
+      }
+
+      state.saldo+=neuBeitrag-altBeitrag;
+    }else{
+      const neuBeitrag=beitragFuerSaldo(neu);
+
+      if(ausIso(neu.datum).getFullYear()===state.saldoJahr){
+        state.jahresSaldo+=neuBeitrag;
+      }
+      state.saldo+=neuBeitrag;
+    }
+
+    const nd=ausIso(neu.datum);
+    if(nd.getFullYear()===jahr&&nd.getMonth()===monat){
+      state.eintraege.push(neu);
+      state.eintraege.sort((a,b)=>a.datum.localeCompare(b.datum));
+    }
+  }
+
+  monatswerteLokalNeu();
+  renderKalender();
+  renderWoche();
+  renderMonat();
+  renderStatistik();
+}
+
 async function aktion(action,payload){
+  const alt=action==="update"
+    ? state.eintraege.find(e=>e.datum===payload.originalDatum)
+    : action==="delete"
+      ? state.eintraege.find(e=>e.datum===payload.datum)
+      : null;
+
   try{
     zeige("Bitte warten ...","");
 
-    const jahr=state.kalenderDatum.getFullYear();
-    const monat=state.kalenderDatum.getMonth()+1;
-
     const r=await jsonp({
       action,
-      payload:JSON.stringify(payload),
-      jahr,
-      monat
+      payload:JSON.stringify(payload)
     });
 
     if(!r.ok)throw new Error(r.message);
 
+    lokalerStandNachAktion(action,payload,alt);
     resetForm(false);
-    serverDatenUebernehmen(r,jahr);
     zeige(r.message,"success");
   }catch(e){
     zeige("Fehler: "+e.message,"error");
