@@ -1,5 +1,5 @@
 const SCRIPT_URL="https://script.google.com/macros/s/AKfycbzKK0n1cfQnNY_VQ-G6vSFveHqMiXaZ3sL2dZWVDUKx2XMw2ZtjliDurWSZPn8nomocWA/exec";
-const $=id=>document.getElementById(id),state={eintraege:[],taetigkeiten:[],kalenderDatum:new Date(),ausgewaehlt:null,originalDatum:null,soll:6,saldo:0,monatSoll:0,monatHaben:0,monatSaldo:0,jahresSaldo:0,saldoJahr:new Date().getFullYear(),cacheJahr:null,jahresEintraege:[],tooltipBlockDatum:null};
+const $=id=>document.getElementById(id),state={eintraege:[],taetigkeiten:[],kalenderDatum:new Date(),ausgewaehlt:null,originalDatum:null,soll:6,saldo:0,monatSoll:0,monatHaben:0,monatSaldo:0,jahresSaldo:0,saldoJahr:new Date().getFullYear(),startDatum:"2026-01-01",cacheJahr:null,jahresEintraege:[],tooltipBlockDatum:null};
 let ladeSequenz=0;
 let jsonpSequenz=0;
 const form=$("entryForm"),datum=$("datum"),taetigkeitenDropdown=$("taetigkeitenDropdown"),taetigkeitenButton=$("taetigkeitenButton"),taetigkeitenListe=$("taetigkeitenListe"),freieBox=$("freieBox"),freieTaetigkeit=$("freieTaetigkeit"),beginn=$("beginn"),ende=$("ende"),abwesenheit=$("abwesenheit"),notiz=$("notiz"),meldung=$("meldung");
@@ -209,8 +209,6 @@ function daten(){
 function validiere(d){
   if(!d.datum)return"Bitte Datum auswählen.";
   if(d.abwesenheit)return"";
-  if(!d.taetigkeit)return"Bitte mindestens eine Tätigkeit auswählen oder eintragen.";
-  if(freieOptionAktiv()&&!freieTaetigkeit.value.trim())return"Bitte die weitere Tätigkeit eintragen.";
   if(!d.beginn||!d.ende)return"Bitte Beginn und Ende eintragen.";
   if(!(d.stunden>0))return"Die Arbeitszeit muss größer als 0 sein.";
   return"";
@@ -247,6 +245,7 @@ function serverDatenUebernehmen(r,jahr){
   state.saldo=Number(r.gesamtSaldo)||0;
   state.jahresSaldo=Number(r.jahresSaldo)||0;
   state.saldoJahr=Number(r.saldoJahr)||jahr;
+  state.startDatum=String(r.startDatum||state.startDatum||"2026-01-01");
 
   if(Array.isArray(r.eintraegeJahr)){
     state.cacheJahr=jahr;
@@ -690,15 +689,33 @@ document.addEventListener("mousemove",event=>{
 });
 
 function renderWoche(){
-  const d=ausIso(state.ausgewaehlt||datum.value),kw=isoWoche(d),jahr=isoJahr(d);
-  const ist=state.eintraege
+  const d=ausIso(state.ausgewaehlt||datum.value);
+  const kw=isoWoche(d);
+  const jahr=isoJahr(d);
+
+  const quelle=
+    state.cacheJahr!==null && state.jahresEintraege.length
+      ? state.jahresEintraege
+      : state.eintraege;
+
+  const ist=quelle
     .filter(e=>{
       const x=ausIso(e.datum);
       return isoWoche(x)===kw&&isoJahr(x)===jahr;
     })
     .reduce((s,e)=>s+Number(e.anrechenbar||0),0);
 
-  $("weekBox").innerHTML=`<strong>Diese Woche: ${format(ist)} von ${format(state.soll)} Stunden</strong><br>Wochensaldo: ${vorzeichen(ist-state.soll)} Stunden`;
+  const tag=d.getDay()||7;
+  const montag=new Date(d);
+  montag.setDate(d.getDate()-(tag-1));
+
+  const mittwoch=new Date(montag);
+  mittwoch.setDate(montag.getDate()+2);
+
+  const start=ausIso(state.startDatum||"2026-01-01");
+  const wochenSoll=mittwoch>=start ? state.soll : 0;
+
+  $("weekBox").innerHTML=`<strong>Diese Woche: ${format(ist)} von ${format(wochenSoll)} Stunden</strong><br>Wochensaldo: ${vorzeichen(ist-wochenSoll)} Stunden`;
 }
 
 function renderMonat(){
