@@ -1,5 +1,5 @@
 const SCRIPT_URL="https://script.google.com/macros/s/AKfycbzKK0n1cfQnNY_VQ-G6vSFveHqMiXaZ3sL2dZWVDUKx2XMw2ZtjliDurWSZPn8nomocWA/exec";
-const $=id=>document.getElementById(id),state={eintraege:[],taetigkeiten:[],kalenderDatum:new Date(),ausgewaehlt:null,originalDatum:null,soll:6,saldo:0,monatSoll:0,monatHaben:0,monatSaldo:0,jahresSaldo:0,saldoJahr:new Date().getFullYear(),tooltipBlockDatum:null};
+const $=id=>document.getElementById(id),state={eintraege:[],taetigkeiten:[],kalenderDatum:new Date(),ausgewaehlt:null,originalDatum:null,soll:6,saldo:0,monatSoll:0,monatHaben:0,monatSaldo:0,jahresSaldo:0,saldoJahr:new Date().getFullYear(),cacheJahr:null,jahresEintraege:[],tooltipBlockDatum:null};
 let ladeSequenz=0;
 let jsonpSequenz=0;
 const form=$("entryForm"),datum=$("datum"),taetigkeitenDropdown=$("taetigkeitenDropdown"),taetigkeitenButton=$("taetigkeitenButton"),taetigkeitenListe=$("taetigkeitenListe"),freieBox=$("freieBox"),freieTaetigkeit=$("freieTaetigkeit"),beginn=$("beginn"),ende=$("ende"),abwesenheit=$("abwesenheit"),notiz=$("notiz"),meldung=$("meldung");
@@ -227,21 +227,73 @@ async function laden(jahr,monat){
 }
 
 function serverDatenUebernehmen(r,jahr){
-  state.eintraege=r.eintraege||[];
   state.taetigkeiten=r.taetigkeiten||[];
   state.soll=Number(r.sollstunden)||6;
   state.saldo=Number(r.gesamtSaldo)||0;
-  state.monatSoll=Number(r.monatSoll)||0;
-  state.monatHaben=Number(r.monatHaben)||0;
-  state.monatSaldo=Number(r.monatSaldo)||0;
   state.jahresSaldo=Number(r.jahresSaldo)||0;
   state.saldoJahr=Number(r.saldoJahr)||jahr;
+
+  if(Array.isArray(r.eintraegeJahr)){
+    state.cacheJahr=jahr;
+    state.jahresEintraege=r.eintraegeJahr;
+    monatLokalSetzen(
+      jahr,
+      state.kalenderDatum.getMonth()+1,
+      false
+    );
+  }else{
+    state.cacheJahr=null;
+    state.jahresEintraege=[];
+    state.eintraege=r.eintraege||[];
+    state.monatSoll=Number(r.monatSoll)||0;
+    state.monatHaben=Number(r.monatHaben)||0;
+    state.monatSaldo=Number(r.monatSaldo)||0;
+  }
 
   renderListe();
   renderKalender();
   renderWoche();
   renderMonat();
   renderStatistik();
+}
+
+function mittwocheImMonat(jahr,monat){
+  let anzahl=0;
+  const ende=new Date(jahr,monat,0).getDate();
+
+  for(let tag=1;tag<=ende;tag++){
+    if(new Date(jahr,monat-1,tag).getDay()===3)anzahl++;
+  }
+
+  return anzahl;
+}
+
+function monatLokalSetzen(jahr,monat,rendern=true){
+  if(state.cacheJahr!==jahr)return false;
+
+  state.eintraege=state.jahresEintraege
+    .filter(e=>{
+      const d=ausIso(e.datum);
+      return d.getFullYear()===jahr&&d.getMonth()===monat-1;
+    })
+    .sort((a,b)=>a.datum.localeCompare(b.datum));
+
+  state.monatSoll=mittwocheImMonat(jahr,monat)*state.soll;
+  state.monatHaben=state.eintraege.reduce(
+    (sum,e)=>sum+Number(e.anrechenbar||0),
+    0
+  );
+  state.monatSaldo=state.monatHaben-state.monatSoll;
+
+  if(rendern){
+    renderKalender();
+    renderWoche();
+    renderMonat();
+    renderStatistik();
+    zeige("","");
+  }
+
+  return true;
 }
 
 async function ladeMonat(){
@@ -344,6 +396,15 @@ function lokalerStandNachAktion(action,payload,alt){
       e=>e.datum!==payload.datum
     );
 
+    if(
+      alt &&
+      state.cacheJahr===ausIso(alt.datum).getFullYear()
+    ){
+      state.jahresEintraege=state.jahresEintraege.filter(
+        e=>e.datum!==alt.datum
+      );
+    }
+
     const altBeitrag=beitragFuerSaldo(alt);
 
     if(alt&&ausIso(alt.datum).getFullYear()===state.saldoJahr){
@@ -358,6 +419,17 @@ function lokalerStandNachAktion(action,payload,alt){
         e=>e.datum!==alt.datum
       );
 
+      if(state.cacheJahr===ausIso(alt.datum).getFullYear()){
+        state.jahresEintraege=state.jahresEintraege.filter(
+          e=>e.datum!==alt.datum
+        );
+      }
+
+      if(state.cacheJahr===ausIso(neu.datum).getFullYear()){
+        state.jahresEintraege.push(neu);
+        state.jahresEintraege.sort((a,b)=>a.datum.localeCompare(b.datum));
+      }
+
       const altBeitrag=beitragFuerSaldo(alt);
       const neuBeitrag=beitragFuerSaldo(neu);
 
@@ -370,6 +442,11 @@ function lokalerStandNachAktion(action,payload,alt){
 
       state.saldo+=neuBeitrag-altBeitrag;
     }else{
+      if(state.cacheJahr===ausIso(neu.datum).getFullYear()){
+        state.jahresEintraege.push(neu);
+        state.jahresEintraege.sort((a,b)=>a.datum.localeCompare(b.datum));
+      }
+
       const neuBeitrag=beitragFuerSaldo(neu);
 
       if(ausIso(neu.datum).getFullYear()===state.saldoJahr){
@@ -637,7 +714,15 @@ async function datumGeaendert(){
   const wechsel=d.getMonth()!==state.kalenderDatum.getMonth()||d.getFullYear()!==state.kalenderDatum.getFullYear();
   state.ausgewaehlt=datum.value;
   state.kalenderDatum=new Date(d.getFullYear(),d.getMonth(),1);
-  wechsel?await ladeMonat():(renderKalender(),renderWoche());
+
+  if(!wechsel){
+    renderKalender();
+    renderWoche();
+    return;
+  }
+
+  if(monatLokalSetzen(d.getFullYear(),d.getMonth()+1))return;
+  await ladeMonat();
 }
 
 async function monatWechseln(r){
@@ -651,6 +736,10 @@ async function monatWechseln(r){
   state.ausgewaehlt=iso(state.kalenderDatum);
   datum.value=state.ausgewaehlt;
 
+  const jahr=state.kalenderDatum.getFullYear();
+  const monat=state.kalenderDatum.getMonth()+1;
+
+  if(monatLokalSetzen(jahr,monat))return;
   await ladeMonat();
 }
 
