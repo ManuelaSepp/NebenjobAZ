@@ -24,6 +24,8 @@ abwesenheit.onchange=handleAbwesenheit;
 $("prevMonth").onclick=()=>monatWechseln(-1);
 $("nextMonth").onclick=()=>monatWechseln(1);
 datum.onchange=datumGeaendert;
+$("exportExcel").onclick=exportExcel;
+$("exportPdf").onclick=exportPdf;
 
 async function init(){
   datum.value=iso(new Date());
@@ -880,6 +882,218 @@ async function monatWechseln(r){
 
   if(monatLokalSetzen(jahr,monat))return;
   await ladeMonat();
+}
+
+
+function exportKontext(){
+  const art=$("exportZeitraum").value;
+  const jahr=state.kalenderDatum.getFullYear();
+  const monat=state.kalenderDatum.getMonth()+1;
+  const start=ausIso(state.startDatum||"2026-01-01");
+
+  let daten=[];
+  let titel="";
+  let soll=0;
+  let haben=0;
+  let saldo=0;
+
+  if(art==="monat"){
+    daten=[...state.eintraege];
+    titel=state.kalenderDatum.toLocaleString("de-DE",{
+      month:"long",
+      year:"numeric"
+    });
+    soll=state.monatSoll;
+    haben=state.monatHaben;
+    saldo=state.monatSaldo;
+  }else{
+    const heute=new Date();
+    let ende;
+
+    if(jahr<heute.getFullYear()){
+      ende=new Date(jahr,11,31);
+    }else if(jahr===heute.getFullYear()){
+      ende=new Date(jahr,heute.getMonth()+1,0);
+    }else{
+      ende=new Date(jahr,11,31);
+    }
+
+    daten=state.jahresEintraege.filter(e=>{
+      const d=ausIso(e.datum);
+      return d.getFullYear()===jahr && d>=start && d<=ende;
+    });
+
+    const jw=jahresZeitkonto(jahr);
+    titel="Jahr "+jahr;
+    soll=jw.soll;
+    haben=jw.haben;
+    saldo=jw.saldo;
+  }
+
+  daten.sort((a,b)=>a.datum.localeCompare(b.datum));
+
+  return{
+    art,
+    jahr,
+    monat,
+    titel,
+    soll,
+    haben,
+    saldo,
+    daten
+  };
+}
+
+function exportZeile(e){
+  const d=ausIso(e.datum);
+
+  return{
+    datum:d.toLocaleDateString("de-DE"),
+    wochentag:d.toLocaleDateString("de-DE",{weekday:"short"}),
+    beginn:e.abwesenheit?"":String(e.beginn||""),
+    ende:e.abwesenheit?"":String(e.ende||""),
+    stunden:Number(e.anrechenbar||e.stunden||0),
+    art:String(e.abwesenheit||"Arbeit"),
+    notiz:String(e.notiz||"")
+  };
+}
+
+function csvFeld(v){
+  const text=String(v??"");
+  return '"'+text.replace(/"/g,'""')+'"';
+}
+
+function exportExcel(){
+  const x=exportKontext();
+  const zeilen=x.daten.map(exportZeile);
+
+  const csv=[
+    [csvFeld("Arbeitszeit Nebenjob")],
+    [csvFeld(x.titel)],
+    [],
+    [csvFeld("Soll"),csvFeld(format(x.soll)+" h")],
+    [csvFeld("Haben"),csvFeld(format(x.haben)+" h")],
+    [csvFeld("Saldo"),csvFeld(vorzeichen(x.saldo)+" h")],
+    [],
+    ["Datum","Wochentag","Beginn","Ende","Stunden","Art","Notiz"].map(csvFeld)
+  ];
+
+  zeilen.forEach(z=>{
+    csv.push([
+      csvFeld(z.datum),
+      csvFeld(z.wochentag),
+      csvFeld(z.beginn),
+      csvFeld(z.ende),
+      csvFeld(format(z.stunden)),
+      csvFeld(z.art),
+      csvFeld(z.notiz)
+    ]);
+  });
+
+  const inhalt="\ufeff"+csv.map(r=>r.join(";")).join("\r\n");
+  const blob=new Blob([inhalt],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+
+  a.href=url;
+  a.download=x.art==="monat"
+    ? "Arbeitszeit_"+x.jahr+"-"+String(x.monat).padStart(2,"0")+".csv"
+    : "Arbeitszeit_"+x.jahr+".csv";
+
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+function htmlSicher(v){
+  return String(v??"")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+}
+
+function exportPdf(){
+  const x=exportKontext();
+  const zeilen=x.daten.map(exportZeile);
+
+  const fenster=window.open("","_blank");
+  if(!fenster){
+    zeige("PDF-Fenster konnte nicht geöffnet werden.","error");
+    return;
+  }
+
+  const body=zeilen.map(z=>`
+    <tr>
+      <td>${htmlSicher(z.datum)}</td>
+      <td>${htmlSicher(z.wochentag)}</td>
+      <td>${htmlSicher(z.beginn)}</td>
+      <td>${htmlSicher(z.ende)}</td>
+      <td class="num">${htmlSicher(format(z.stunden))}</td>
+      <td>${htmlSicher(z.art)}</td>
+      <td>${htmlSicher(z.notiz)}</td>
+    </tr>`
+  ).join("");
+
+  const erstellt=new Date().toLocaleDateString("de-DE");
+
+  fenster.document.open();
+  fenster.document.write(`<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Arbeitszeitnachweis</title>
+<style>
+@page{size:A4 landscape;margin:12mm}
+body{font-family:Arial,sans-serif;color:#222;margin:0}
+h1{font-size:20px;margin:0 0 4px}
+.meta{font-size:12px;color:#555;margin-bottom:16px}
+.summary{display:flex;gap:12px;margin:0 0 18px}
+.summary div{border:1px solid #ccc;border-radius:8px;padding:8px 12px;min-width:120px}
+.summary span{display:block;font-size:11px;color:#666}
+.summary strong{font-size:16px}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th,td{border:1px solid #ccc;padding:6px 7px;vertical-align:top}
+th{background:#f2f2f2;text-align:left}
+.num{text-align:right;white-space:nowrap}
+.note{width:30%}
+.footer{margin-top:12px;font-size:10px;color:#666}
+</style>
+</head>
+<body>
+<h1>Arbeitszeitnachweis – ${htmlSicher(x.titel)}</h1>
+<div class="meta">Erstellt am ${htmlSicher(erstellt)}</div>
+
+<div class="summary">
+  <div><span>Soll</span><strong>${htmlSicher(format(x.soll))} h</strong></div>
+  <div><span>Haben</span><strong>${htmlSicher(format(x.haben))} h</strong></div>
+  <div><span>Saldo</span><strong>${htmlSicher(vorzeichen(x.saldo))} h</strong></div>
+</div>
+
+<table>
+<thead>
+<tr>
+  <th>Datum</th>
+  <th>Tag</th>
+  <th>Beginn</th>
+  <th>Ende</th>
+  <th>Stunden</th>
+  <th>Art</th>
+  <th class="note">Notiz</th>
+</tr>
+</thead>
+<tbody>${body}</tbody>
+</table>
+
+<div class="footer">Export ohne Tätigkeiten</div>
+<script>
+window.addEventListener("load",()=>setTimeout(()=>window.print(),250));
+<\/script>
+</body>
+</html>`);
+  fenster.document.close();
 }
 
 function jsonp(p){
