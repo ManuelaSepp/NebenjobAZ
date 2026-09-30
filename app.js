@@ -1072,7 +1072,7 @@ async function exportExcel(){
       c.value=h;
       c.font={bold:true,color:{argb:"FFFFFF"}};
       c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"70AD47"}};
-      c.alignment={vertical:"middle"};
+      c.alignment={horizontal:"center",vertical:"middle"};
     });
 
     zeilen.forEach((z,idx)=>{
@@ -1090,6 +1090,13 @@ async function exportExcel(){
       ws.getCell(row,5).value=z.stunden;
       ws.getCell(row,5).numFmt='0.00';
       ws.getCell(row,6).value=z.art;
+
+      for(let col=1;col<=6;col++){
+        ws.getCell(row,col).alignment={
+          horizontal:"center",
+          vertical:"middle"
+        };
+      }
     });
 
     const excelBreiten=[
