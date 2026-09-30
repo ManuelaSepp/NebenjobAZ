@@ -104,7 +104,7 @@ details.card{padding:0;overflow:hidden}summary{padding:18px 20px;font-size:19px;
   <option value="monat">Aktueller Monat</option>
   <option value="jahr">Ganzes Jahr</option>
 </select>
-<p class="export-hint">Exportiert Datum, Zeiten, Stunden, Abwesenheit und Notiz – ohne Tätigkeiten.</p>
+<p class="export-hint">Exportiert Datum, Zeiten, Stunden und Abwesenheit – ohne Tätigkeiten und Notizen.</p>
 <div class="export-row">
   <button id="exportExcel" type="button" class="export-excel">Excel (.xlsx)</button>
   <button id="exportPdf" type="button" class="export-pdf">PDF / Drucken</button>
@@ -113,6 +113,6 @@ details.card{padding:0;overflow:hidden}summary{padding:18px 20px;font-size:19px;
 </main>
 <div id="calendarTooltip" class="calendar-tooltip" role="tooltip"></div>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-<script src="app.js?v=20.1"></script>
+<script src="app.js?v=20.2"></script>
 <script>if("serviceWorker"in navigator){navigator.serviceWorker.register("./service-worker.js").catch(console.error)}</script>
 </body></html>
