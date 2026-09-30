@@ -1,5 +1,5 @@
 const SCRIPT_URL="https://script.google.com/macros/s/AKfycbzKK0n1cfQnNY_VQ-G6vSFveHqMiXaZ3sL2dZWVDUKx2XMw2ZtjliDurWSZPn8nomocWA/exec";
-const $=id=>document.getElementById(id),state={eintraege:[],taetigkeiten:[],kalenderDatum:new Date(),ausgewaehlt:null,originalDatum:null,soll:6,saldo:0,monatSoll:0,monatHaben:0,monatSaldo:0,jahresSaldo:0,saldoJahr:new Date().getFullYear(),startDatum:"2026-01-01",cacheJahr:null,jahresEintraege:[],tooltipBlockDatum:null};
+const $=id=>document.getElementById(id),state={eintraege:[],taetigkeiten:[],kalenderDatum:new Date(),ausgewaehlt:null,originalDatum:null,soll:6,saldo:0,monatSoll:0,monatHaben:0,monatSaldo:0,jahresSaldo:0,saldoJahr:new Date().getFullYear(),startDatum:"2026-01-01",startSaldo:null,cacheJahr:null,jahresEintraege:[],tooltipBlockDatum:null};
 let ladeSequenz=0;
 let jsonpSequenz=0;
 const form=$("entryForm"),datum=$("datum"),taetigkeitenDropdown=$("taetigkeitenDropdown"),taetigkeitenButton=$("taetigkeitenButton"),taetigkeitenListe=$("taetigkeitenListe"),freieBox=$("freieBox"),freieTaetigkeit=$("freieTaetigkeit"),beginn=$("beginn"),ende=$("ende"),abwesenheit=$("abwesenheit"),notiz=$("notiz"),meldung=$("meldung");
@@ -246,6 +246,11 @@ function serverDatenUebernehmen(r,jahr){
   state.jahresSaldo=Number(r.jahresSaldo)||0;
   state.saldoJahr=Number(r.saldoJahr)||jahr;
   state.startDatum=String(r.startDatum||state.startDatum||"2026-01-01");
+
+  const startJahr=ausIso(state.startDatum).getFullYear();
+  if(state.startSaldo===null && state.saldoJahr===startJahr){
+    state.startSaldo=state.saldo-state.jahresSaldo;
+  }
 
   if(Array.isArray(r.eintraegeJahr)){
     state.cacheJahr=jahr;
@@ -726,19 +731,121 @@ function renderMonat(){
   el.className=state.monatSaldo>0?"plus":state.monatSaldo<0?"minus":"";
 }
 
+function jahresZeitkonto(jahr){
+  const heute=new Date();
+  const start=ausIso(state.startDatum||"2026-01-01");
+  const jahresStart=new Date(jahr,0,1);
+  const startImJahr=start>jahresStart?start:jahresStart;
+
+  let ende;
+  if(jahr<heute.getFullYear()){
+    ende=new Date(jahr,11,31);
+  }else if(jahr===heute.getFullYear()){
+    ende=new Date(jahr,heute.getMonth()+1,0);
+  }else{
+    return {soll:0,haben:0,saldo:0};
+  }
+
+  if(startImJahr>ende)return {soll:0,haben:0,saldo:0};
+
+  let mittwoche=0;
+  for(let d=new Date(startImJahr);d<=ende;d.setDate(d.getDate()+1)){
+    if(d.getDay()===3)mittwoche++;
+  }
+
+  const haben=state.jahresEintraege
+    .filter(e=>{
+      const d=ausIso(e.datum);
+      return d>=startImJahr&&d<=ende;
+    })
+    .reduce((sum,e)=>sum+Number(e.anrechenbar||0),0);
+
+  const soll=mittwoche*state.soll;
+  return {soll,haben,saldo:haben-soll};
+}
+
+function monatsSaldoFuerUebersicht(jahr,monat){
+  const heute=new Date();
+  const start=ausIso(state.startDatum||"2026-01-01");
+  const monatsStart=new Date(jahr,monat-1,1);
+  const monatsEnde=new Date(jahr,monat,0);
+
+  if(monatsEnde<start)return null;
+  if(jahr>heute.getFullYear())return null;
+  if(jahr===heute.getFullYear()&&monat>heute.getMonth()+1)return null;
+
+  const wirksamerStart=start>monatsStart?start:monatsStart;
+
+  let mittwoche=0;
+  for(let d=new Date(wirksamerStart);d<=monatsEnde;d.setDate(d.getDate()+1)){
+    if(d.getDay()===3)mittwoche++;
+  }
+
+  const haben=state.jahresEintraege
+    .filter(e=>{
+      const d=ausIso(e.datum);
+      return d>=wirksamerStart&&d<=monatsEnde;
+    })
+    .reduce((sum,e)=>sum+Number(e.anrechenbar||0),0);
+
+  return haben-(mittwoche*state.soll);
+}
+
+function wertSetzen(id,wert,mitVorzeichen=false){
+  const el=$(id);
+  if(!el)return;
+  el.textContent=(mitVorzeichen?vorzeichen(wert):format(wert))+" h";
+  el.className=wert>0?"plus":wert<0?"minus":"";
+}
+
 function renderStatistik(){
-  $("statStunden").textContent=format(
-    state.eintraege.reduce((s,e)=>s+Number(e.stunden||0),0)
-  );
+  const jahr=state.kalenderDatum.getFullYear();
+  const jahrWerte=jahresZeitkonto(jahr);
 
-  const jahr=$("statJahr");
-  jahr.textContent=vorzeichen(state.jahresSaldo);
-  jahr.className=state.jahresSaldo>0?"plus":state.jahresSaldo<0?"minus":"";
-  $("statJahrLabel").textContent="Jahressaldo "+state.saldoJahr;
+  $("zeitkontoMonatTitel").textContent=
+    state.kalenderDatum.toLocaleString("de-DE",{month:"long",year:"numeric"});
+  wertSetzen("zkMonatSoll",state.monatSoll);
+  wertSetzen("zkMonatHaben",state.monatHaben);
+  wertSetzen("zkMonatSaldo",state.monatSaldo,true);
 
-  const el=$("statSaldo");
-  el.textContent=vorzeichen(state.saldo);
-  el.className=state.saldo>0?"plus":state.saldo<0?"minus":"";
+  $("zeitkontoJahrTitel").textContent="Jahr "+jahr;
+  wertSetzen("zkJahrSoll",jahrWerte.soll);
+  wertSetzen("zkJahrHaben",jahrWerte.haben);
+  wertSetzen("zkJahrSaldo",jahrWerte.saldo,true);
+
+  const startSaldo=state.startSaldo===null
+    ? state.saldo-state.jahresSaldo
+    : state.startSaldo;
+  const veraenderung=state.saldo-startSaldo;
+
+  wertSetzen("zkStartsaldo",startSaldo,true);
+  wertSetzen("zkVeraenderung",veraenderung,true);
+  wertSetzen("zkGesamtsaldo",state.saldo,true);
+
+  const namen=["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+  const grid=$("monatsSaldoGrid");
+  if(!grid)return;
+
+  grid.innerHTML="";
+  namen.forEach((name,index)=>{
+    const saldo=monatsSaldoFuerUebersicht(jahr,index+1);
+    const box=document.createElement("div");
+    box.className="year-month";
+
+    const label=document.createElement("span");
+    label.textContent=name;
+
+    const wert=document.createElement("strong");
+    if(saldo===null){
+      wert.textContent="—";
+    }else{
+      wert.textContent=vorzeichen(saldo)+" h";
+      wert.className=saldo>0?"plus":saldo<0?"minus":"";
+    }
+
+    box.append(label,wert);
+    grid.appendChild(box);
+  });
 }
 
 async function datumGeaendert(){
