@@ -885,70 +885,129 @@ async function monatWechseln(r){
 }
 
 
+function exportQuelle(jahr){
+  if(state.cacheJahr===jahr && Array.isArray(state.jahresEintraege)){
+    return state.jahresEintraege;
+  }
+  return state.eintraege.filter(e=>ausIso(e.datum).getFullYear()===jahr);
+}
+
+function monatsWerteFuerExport(jahr,monat){
+  const start=ausIso(state.startDatum||"2026-01-01");
+  const monatsStart=new Date(jahr,monat-1,1);
+  const monatsEnde=new Date(jahr,monat,0);
+
+  if(monatsEnde<start){
+    return {soll:0,haben:0,saldo:0,daten:[]};
+  }
+
+  const wirksamerStart=start>monatsStart?start:monatsStart;
+  let mittwoche=0;
+
+  for(let d=new Date(wirksamerStart);d<=monatsEnde;d.setDate(d.getDate()+1)){
+    if(d.getDay()===3)mittwoche++;
+  }
+
+  const daten=exportQuelle(jahr)
+    .filter(e=>{
+      const d=ausIso(e.datum);
+      return d>=wirksamerStart&&d<=monatsEnde;
+    })
+    .sort((a,b)=>a.datum.localeCompare(b.datum));
+
+  const haben=daten.reduce((sum,e)=>sum+Number(e.anrechenbar||0),0);
+  const soll=mittwoche*state.soll;
+
+  return {soll,haben,saldo:haben-soll,daten};
+}
+
+function exportStartsaldo(){
+  return state.startSaldo===null
+    ? state.saldo-state.jahresSaldo
+    : state.startSaldo;
+}
+
+function kontostandBisMonat(jahr,monat){
+  const start=ausIso(state.startDatum||"2026-01-01");
+  const startJahr=start.getFullYear();
+  if(jahr!==startJahr)return null;
+
+  let stand=exportStartsaldo();
+  for(let m=start.getMonth()+1;m<=monat;m++){
+    stand+=monatsWerteFuerExport(jahr,m).saldo;
+  }
+  return stand;
+}
+
 function exportKontext(){
   const art=$("exportZeitraum").value;
   const jahr=state.kalenderDatum.getFullYear();
   const monat=state.kalenderDatum.getMonth()+1;
-  const start=ausIso(state.startDatum||"2026-01-01");
 
-  let daten=[];
-  let titel="";
-  let soll=0;
-  let haben=0;
-  let saldo=0;
-
-  if(art==="monat"){
-    daten=[...state.eintraege];
-    titel=state.kalenderDatum.toLocaleString("de-DE",{
-      month:"long",
-      year:"numeric"
-    });
-    soll=state.monatSoll;
-    haben=state.monatHaben;
-    saldo=state.monatSaldo;
-  }else{
-    const heute=new Date();
-    let ende;
-
-    if(jahr<heute.getFullYear()){
-      ende=new Date(jahr,11,31);
-    }else if(jahr===heute.getFullYear()){
-      ende=new Date(jahr,heute.getMonth()+1,0);
-    }else{
-      ende=new Date(jahr,11,31);
-    }
-
-    daten=state.jahresEintraege.filter(e=>{
-      const d=ausIso(e.datum);
-      return d.getFullYear()===jahr && d>=start && d<=ende;
-    });
-
-    const jw=jahresZeitkonto(jahr);
-    titel="Jahr "+jahr;
-    soll=jw.soll;
-    haben=jw.haben;
-    saldo=jw.saldo;
+  if(art==="jahr" && state.cacheJahr!==jahr){
+    throw new Error("Jahresdaten sind noch nicht vollständig geladen. Bitte einmal neu laden.");
   }
 
-  daten.sort((a,b)=>a.datum.localeCompare(b.datum));
+  const startSaldo=exportStartsaldo();
+
+  if(art==="monat"){
+    const mw=monatsWerteFuerExport(jahr,monat);
+    const standEnde=kontostandBisMonat(jahr,monat);
+    const standAnfang=monat>1
+      ? kontostandBisMonat(jahr,monat-1)
+      : startSaldo;
+
+    return{
+      art,
+      jahr,
+      monat,
+      titel:state.kalenderDatum.toLocaleString("de-DE",{month:"long",year:"numeric"}),
+      soll:mw.soll,
+      haben:mw.haben,
+      saldo:mw.saldo,
+      startSaldo,
+      standAnfang,
+      standEnde,
+      gesamtSaldo:standEnde,
+      daten:mw.daten
+    };
+  }
+
+  const jw=jahresZeitkonto(jahr);
+  const heute=new Date();
+  const bisMonat=jahr===heute.getFullYear()?heute.getMonth()+1:12;
+  const standEnde=kontostandBisMonat(jahr,bisMonat);
+  const start=ausIso(state.startDatum||"2026-01-01");
+
+  const daten=exportQuelle(jahr)
+    .filter(e=>{
+      const d=ausIso(e.datum);
+      const ende=new Date(jahr,bisMonat,0);
+      return d.getFullYear()===jahr && d>=start && d<=ende;
+    })
+    .sort((a,b)=>a.datum.localeCompare(b.datum));
 
   return{
     art,
     jahr,
     monat,
-    titel,
-    soll,
-    haben,
-    saldo,
+    titel:"Jahr "+jahr,
+    soll:jw.soll,
+    haben:jw.haben,
+    saldo:jw.saldo,
+    startSaldo,
+    standAnfang:startSaldo,
+    standEnde,
+    gesamtSaldo:standEnde,
     daten
   };
 }
 
 function exportZeile(e){
   const d=ausIso(e.datum);
-
   return{
-    datum:d.toLocaleDateString("de-DE"),
+    datum:d,
+    datumText:d.toLocaleDateString("de-DE"),
     wochentag:d.toLocaleDateString("de-DE",{weekday:"short"}),
     beginn:e.abwesenheit?"":String(e.beginn||""),
     ende:e.abwesenheit?"":String(e.ende||""),
@@ -958,52 +1017,131 @@ function exportZeile(e){
   };
 }
 
-function csvFeld(v){
-  const text=String(v??"");
-  return '"'+text.replace(/"/g,'""')+'"';
+function farbeFuerSaldo(v){
+  return v<0?"C00000":v>0?"548235":"222222";
 }
 
-function exportExcel(){
-  const x=exportKontext();
-  const zeilen=x.daten.map(exportZeile);
+async function exportExcel(){
+  try{
+    if(typeof ExcelJS==="undefined"){
+      throw new Error("Excel-Modul konnte nicht geladen werden. Bitte Internetverbindung prüfen.");
+    }
 
-  const csv=[
-    [csvFeld("Arbeitszeit Nebenjob")],
-    [csvFeld(x.titel)],
-    [],
-    [csvFeld("Soll"),csvFeld(format(x.soll)+" h")],
-    [csvFeld("Haben"),csvFeld(format(x.haben)+" h")],
-    [csvFeld("Saldo"),csvFeld(vorzeichen(x.saldo)+" h")],
-    [],
-    ["Datum","Wochentag","Beginn","Ende","Stunden","Art","Notiz"].map(csvFeld)
-  ];
+    const x=exportKontext();
+    const zeilen=x.daten.map(exportZeile);
+    const wb=new ExcelJS.Workbook();
+    wb.creator="Arbeitszeit Nebenjob";
+    wb.created=new Date();
 
-  zeilen.forEach(z=>{
-    csv.push([
-      csvFeld(z.datum),
-      csvFeld(z.wochentag),
-      csvFeld(z.beginn),
-      csvFeld(z.ende),
-      csvFeld(format(z.stunden)),
-      csvFeld(z.art),
-      csvFeld(z.notiz)
-    ]);
-  });
+    const ws=wb.addWorksheet("Arbeitszeit");
+    ws.mergeCells("A1:G1");
+    ws.getCell("A1").value="Arbeitszeitnachweis - "+x.titel;
+    ws.getCell("A1").font={bold:true,size:16};
+    ws.getCell("A2").value="Export ohne Tätigkeiten";
+    ws.getCell("A2").font={italic:true,color:{argb:"666666"}};
 
-  const inhalt="\ufeff"+csv.map(r=>r.join(";")).join("\r\n");
-  const blob=new Blob([inhalt],{type:"text/csv;charset=utf-8"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
+    const summary=x.art==="monat"
+      ?[
+        ["Kontostand Monatsanfang",x.standAnfang],
+        ["Soll",x.soll],
+        ["Haben",x.haben],
+        ["Monatssaldo",x.saldo],
+        ["Kontostand Monatsende",x.standEnde]
+      ]
+      :[
+        ["Startsaldo Zeitkonto",x.startSaldo],
+        ["Soll",x.soll],
+        ["Haben",x.haben],
+        ["Jahressaldo",x.saldo],
+        ["Gesamtsaldo inkl. Startsaldo",x.standEnde]
+      ];
 
-  a.href=url;
-  a.download=x.art==="monat"
-    ? "Arbeitszeit_"+x.jahr+"-"+String(x.monat).padStart(2,"0")+".csv"
-    : "Arbeitszeit_"+x.jahr+".csv";
+    summary.forEach((r,i)=>{
+      const row=4+i;
+      ws.getCell(row,1).value=r[0];
+      ws.getCell(row,1).font={bold:true};
+      ws.getCell(row,2).value=Number(r[1]||0);
+      ws.getCell(row,2).numFmt='0.00 "h"';
+      ws.getCell(row,2).font={bold:true,color:{argb:farbeFuerSaldo(Number(r[1]||0))}};
+    });
 
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
+    const headerRow=11;
+    const headers=["Datum","Wochentag","Beginn","Ende","Stunden","Art","Notiz"];
+    headers.forEach((h,i)=>{
+      const c=ws.getCell(headerRow,i+1);
+      c.value=h;
+      c.font={bold:true,color:{argb:"FFFFFF"}};
+      c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"70AD47"}};
+      c.alignment={vertical:"middle"};
+    });
+
+    zeilen.forEach((z,idx)=>{
+      const row=headerRow+1+idx;
+      ws.getCell(row,1).value=z.datum;
+      ws.getCell(row,1).numFmt="dd.mm.yyyy";
+      ws.getCell(row,2).value=z.wochentag;
+      ws.getCell(row,3).value=z.beginn;
+      ws.getCell(row,4).value=z.ende;
+      ws.getCell(row,5).value=z.stunden;
+      ws.getCell(row,5).numFmt='0.00';
+      ws.getCell(row,6).value=z.art;
+      ws.getCell(row,7).value=z.notiz;
+    });
+
+    ws.columns=[
+      {width:14},{width:12},{width:10},{width:10},
+      {width:12},{width:14},{width:38}
+    ];
+    ws.views=[{state:"frozen",ySplit:headerRow}];
+    ws.autoFilter={from:{row:headerRow,column:1},to:{row:headerRow,column:7}};
+
+    if(x.art==="jahr"){
+      const ms=wb.addWorksheet("Monatssalden");
+      const monate=["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+
+      ms.addRow(["Monat","Soll","Haben","Saldo","Kontostand"]);
+      const hr=ms.getRow(1);
+      hr.font={bold:true,color:{argb:"FFFFFF"}};
+      hr.fill={type:"pattern",pattern:"solid",fgColor:{argb:"70AD47"}};
+
+      let stand=x.startSaldo;
+      const heute=new Date();
+      const maxMonat=x.jahr===heute.getFullYear()?heute.getMonth()+1:12;
+
+      for(let m=1;m<=12;m++){
+        if(m>maxMonat){
+          ms.addRow([monate[m-1],"","","",""]);
+          continue;
+        }
+        const mw=monatsWerteFuerExport(x.jahr,m);
+        stand+=mw.saldo;
+        const r=ms.addRow([monate[m-1],mw.soll,mw.haben,mw.saldo,stand]);
+        [2,3,4,5].forEach(c=>r.getCell(c).numFmt='0.00 "h"');
+        r.getCell(4).font={color:{argb:farbeFuerSaldo(mw.saldo)}};
+        r.getCell(5).font={bold:true,color:{argb:farbeFuerSaldo(stand)}};
+      }
+
+      ms.columns=[{width:16},{width:12},{width:12},{width:12},{width:16}];
+      ms.views=[{state:"frozen",ySplit:1}];
+    }
+
+    const buffer=await wb.xlsx.writeBuffer();
+    const blob=new Blob([buffer],{
+      type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    });
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download=x.art==="monat"
+      ?"Arbeitszeit_"+x.jahr+"-"+String(x.monat).padStart(2,"0")+".xlsx"
+      :"Arbeitszeit_"+x.jahr+".xlsx";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }catch(e){
+    zeige("Excel-Export: "+e.message,"error");
+  }
 }
 
 function htmlSicher(v){
@@ -1016,84 +1154,99 @@ function htmlSicher(v){
 }
 
 function exportPdf(){
-  const x=exportKontext();
-  const zeilen=x.daten.map(exportZeile);
+  try{
+    const x=exportKontext();
+    const zeilen=x.daten.map(exportZeile);
+    const fenster=window.open("","_blank");
 
-  const fenster=window.open("","_blank");
-  if(!fenster){
-    zeige("PDF-Fenster konnte nicht geöffnet werden.","error");
-    return;
-  }
+    if(!fenster){
+      throw new Error("PDF-Fenster konnte nicht geöffnet werden.");
+    }
 
-  const body=zeilen.map(z=>`
-    <tr>
-      <td>${htmlSicher(z.datum)}</td>
-      <td>${htmlSicher(z.wochentag)}</td>
-      <td>${htmlSicher(z.beginn)}</td>
-      <td>${htmlSicher(z.ende)}</td>
-      <td class="num">${htmlSicher(format(z.stunden))}</td>
-      <td>${htmlSicher(z.art)}</td>
-      <td>${htmlSicher(z.notiz)}</td>
-    </tr>`
-  ).join("");
+    const summary=x.art==="monat"
+      ?[
+        ["Kontostand Monatsanfang",x.standAnfang],
+        ["Soll",x.soll],
+        ["Haben",x.haben],
+        ["Monatssaldo",x.saldo],
+        ["Kontostand Monatsende",x.standEnde]
+      ]
+      :[
+        ["Startsaldo Zeitkonto",x.startSaldo],
+        ["Soll",x.soll],
+        ["Haben",x.haben],
+        ["Jahressaldo",x.saldo],
+        ["Gesamtsaldo inkl. Startsaldo",x.standEnde]
+      ];
 
-  const erstellt=new Date().toLocaleDateString("de-DE");
+    const summaryHtml=summary.map(r=>{
+      const cls=Number(r[1])<0?"minus":Number(r[1])>0?"plus":"";
+      return '<div><span>'+htmlSicher(r[0])+'</span><strong class="'+cls+'">'+
+        htmlSicher(vorzeichen(Number(r[1]||0)))+' h</strong></div>';
+    }).join("");
 
-  fenster.document.open();
-  fenster.document.write(`<!DOCTYPE html>
+    const body=zeilen.map(z=>
+      '<tr>'+
+      '<td>'+htmlSicher(z.datumText)+'</td>'+
+      '<td>'+htmlSicher(z.wochentag)+'</td>'+
+      '<td>'+htmlSicher(z.beginn)+'</td>'+
+      '<td>'+htmlSicher(z.ende)+'</td>'+
+      '<td class="num">'+htmlSicher(format(z.stunden))+'</td>'+
+      '<td>'+htmlSicher(z.art)+'</td>'+
+      '<td>'+htmlSicher(z.notiz)+'</td>'+
+      '</tr>'
+    ).join("");
+
+    const erstellt=new Date().toLocaleDateString("de-DE");
+
+    fenster.document.open();
+    fenster.document.write(`<!DOCTYPE html>
 <html lang="de">
 <head>
 <meta charset="UTF-8">
 <title>Arbeitszeitnachweis</title>
 <style>
-@page{size:A4 landscape;margin:12mm}
+@page{size:A4 landscape;margin:11mm}
 body{font-family:Arial,sans-serif;color:#222;margin:0}
 h1{font-size:20px;margin:0 0 4px}
-.meta{font-size:12px;color:#555;margin-bottom:16px}
-.summary{display:flex;gap:12px;margin:0 0 18px}
-.summary div{border:1px solid #ccc;border-radius:8px;padding:8px 12px;min-width:120px}
-.summary span{display:block;font-size:11px;color:#666}
-.summary strong{font-size:16px}
-table{width:100%;border-collapse:collapse;font-size:11px}
-th,td{border:1px solid #ccc;padding:6px 7px;vertical-align:top}
-th{background:#f2f2f2;text-align:left}
+.meta{font-size:11px;color:#666;margin-bottom:14px}
+.summary{display:flex;flex-wrap:wrap;gap:9px;margin:0 0 16px}
+.summary div{border:1px solid #ccd3d9;border-radius:8px;padding:7px 10px;min-width:135px}
+.summary span{display:block;font-size:10px;color:#666;margin-bottom:2px}
+.summary strong{font-size:14px}
+.plus{color:#337a19}.minus{color:#b42318}
+table{width:100%;border-collapse:collapse;font-size:10px}
+thead{display:table-header-group}
+tr{page-break-inside:avoid}
+th,td{border-bottom:1px solid #d6d6d6;padding:5px 6px;vertical-align:top}
+th{background:#eef3f7;text-align:left;font-weight:700}
 .num{text-align:right;white-space:nowrap}
-.note{width:30%}
-.footer{margin-top:12px;font-size:10px;color:#666}
+.note{width:31%}
+.footer{margin-top:10px;font-size:9px;color:#777}
 </style>
 </head>
 <body>
-<h1>Arbeitszeitnachweis – ${htmlSicher(x.titel)}</h1>
-<div class="meta">Erstellt am ${htmlSicher(erstellt)}</div>
-
-<div class="summary">
-  <div><span>Soll</span><strong>${htmlSicher(format(x.soll))} h</strong></div>
-  <div><span>Haben</span><strong>${htmlSicher(format(x.haben))} h</strong></div>
-  <div><span>Saldo</span><strong>${htmlSicher(vorzeichen(x.saldo))} h</strong></div>
-</div>
-
+<h1>Arbeitszeitnachweis - ${htmlSicher(x.titel)}</h1>
+<div class="meta">Erstellt am ${htmlSicher(erstellt)} - ohne Tätigkeiten</div>
+<div class="summary">${summaryHtml}</div>
 <table>
 <thead>
 <tr>
-  <th>Datum</th>
-  <th>Tag</th>
-  <th>Beginn</th>
-  <th>Ende</th>
-  <th>Stunden</th>
-  <th>Art</th>
-  <th class="note">Notiz</th>
+<th>Datum</th><th>Tag</th><th>Beginn</th><th>Ende</th><th>Stunden</th><th>Art</th><th class="note">Notiz</th>
 </tr>
 </thead>
 <tbody>${body}</tbody>
 </table>
-
-<div class="footer">Export ohne Tätigkeiten</div>
+<div class="footer">Arbeitszeit Nebenjob</div>
 <script>
 window.addEventListener("load",()=>setTimeout(()=>window.print(),250));
 <\/script>
 </body>
 </html>`);
-  fenster.document.close();
+    fenster.document.close();
+  }catch(e){
+    zeige("PDF-Export: "+e.message,"error");
+  }
 }
 
 function jsonp(p){
