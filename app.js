@@ -662,7 +662,7 @@ function jsonp(p){
     const t=setTimeout(()=>{
       clean();
       rej(new Error("Zeitüberschreitung"));
-    },15000);
+    },45000);
 
     function clean(){
       clearTimeout(t);
