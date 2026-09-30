@@ -217,13 +217,28 @@ function validiere(d){
 }
 
 async function laden(jahr,monat){
-  const r=await jsonp({
-    action:"init",
-    jahr,
-    monat
-  });
-  if(!r.ok)throw new Error(r.message);
-  return r;
+  let letzterFehler=null;
+
+  for(let versuch=1;versuch<=2;versuch++){
+    try{
+      const r=await jsonp({
+        action:"init",
+        jahr,
+        monat
+      });
+
+      if(!r.ok)throw new Error(r.message);
+      return r;
+    }catch(e){
+      letzterFehler=e;
+
+      if(versuch<2){
+        await new Promise(resolve=>setTimeout(resolve,1000));
+      }
+    }
+  }
+
+  throw letzterFehler;
 }
 
 function serverDatenUebernehmen(r,jahr){
