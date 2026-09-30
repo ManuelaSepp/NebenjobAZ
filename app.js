@@ -1077,7 +1077,12 @@ async function exportExcel(){
 
     zeilen.forEach((z,idx)=>{
       const row=headerRow+1+idx;
-      ws.getCell(row,1).value=z.datum;
+      const excelDatum=Date.UTC(
+        z.datum.getFullYear(),
+        z.datum.getMonth(),
+        z.datum.getDate()
+      )/86400000+25569;
+      ws.getCell(row,1).value=excelDatum;
       ws.getCell(row,1).numFmt="dd.mm.yyyy";
       ws.getCell(row,2).value=z.wochentag;
       ws.getCell(row,3).value=z.beginn;
@@ -1089,7 +1094,7 @@ async function exportExcel(){
     });
 
     ws.columns=[
-      {width:14},{width:12},{width:10},{width:10},
+      {width:30},{width:14},{width:10},{width:10},
       {width:12},{width:14},{width:38}
     ];
     ws.views=[{state:"frozen",ySplit:headerRow}];
