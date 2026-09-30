@@ -1012,8 +1012,7 @@ function exportZeile(e){
     beginn:e.abwesenheit?"":String(e.beginn||""),
     ende:e.abwesenheit?"":String(e.ende||""),
     stunden:Number(e.anrechenbar||e.stunden||0),
-    art:String(e.abwesenheit||"Arbeit"),
-    notiz:String(e.notiz||"")
+    art:String(e.abwesenheit||"Arbeit")
   };
 }
 
@@ -1034,7 +1033,7 @@ async function exportExcel(){
     wb.created=new Date();
 
     const ws=wb.addWorksheet("Arbeitszeit");
-    ws.mergeCells("A1:G1");
+    ws.mergeCells("A1:F1");
     ws.getCell("A1").value="Arbeitszeitnachweis - "+x.titel;
     ws.getCell("A1").font={bold:true,size:16};
     ws.getCell("A2").value="Export ohne Tätigkeiten";
@@ -1058,15 +1057,16 @@ async function exportExcel(){
 
     summary.forEach((r,i)=>{
       const row=4+i;
+      ws.mergeCells(row,1,row,3);
       ws.getCell(row,1).value=r[0];
       ws.getCell(row,1).font={bold:true};
-      ws.getCell(row,2).value=Number(r[1]||0);
-      ws.getCell(row,2).numFmt='0.00 "h"';
-      ws.getCell(row,2).font={bold:true,color:{argb:farbeFuerSaldo(Number(r[1]||0))}};
+      ws.getCell(row,4).value=Number(r[1]||0);
+      ws.getCell(row,4).numFmt='0.00 "h"';
+      ws.getCell(row,4).font={bold:true,color:{argb:farbeFuerSaldo(Number(r[1]||0))}};
     });
 
     const headerRow=11;
-    const headers=["Datum","Wochentag","Beginn","Ende","Stunden","Art","Notiz"];
+    const headers=["Datum","Wochentag","Beginn","Ende","Stunden","Art"];
     headers.forEach((h,i)=>{
       const c=ws.getCell(headerRow,i+1);
       c.value=h;
@@ -1090,15 +1090,19 @@ async function exportExcel(){
       ws.getCell(row,5).value=z.stunden;
       ws.getCell(row,5).numFmt='0.00';
       ws.getCell(row,6).value=z.art;
-      ws.getCell(row,7).value=z.notiz;
     });
 
-    ws.columns=[
-      {width:30},{width:14},{width:10},{width:10},
-      {width:12},{width:14},{width:38}
+    const excelBreiten=[
+      Math.max(12,...zeilen.map(z=>z.datumText.length+2)),
+      Math.max(12,...zeilen.map(z=>z.wochentag.length+2)),
+      Math.max(8,...zeilen.map(z=>z.beginn.length+2)),
+      Math.max(8,...zeilen.map(z=>z.ende.length+2)),
+      Math.max(9,...zeilen.map(z=>format(z.stunden).length+2)),
+      Math.max(8,...zeilen.map(z=>z.art.length+2))
     ];
+    ws.columns=excelBreiten.map(width=>({width}));
     ws.views=[{state:"frozen",ySplit:headerRow}];
-    ws.autoFilter={from:{row:headerRow,column:1},to:{row:headerRow,column:7}};
+    ws.autoFilter={from:{row:headerRow,column:1},to:{row:headerRow,column:6}};
 
     if(x.art==="jahr"){
       const ms=wb.addWorksheet("Monatssalden");
@@ -1198,7 +1202,6 @@ function exportPdf(){
       '<td>'+htmlSicher(z.ende)+'</td>'+
       '<td class="num">'+htmlSicher(format(z.stunden))+'</td>'+
       '<td>'+htmlSicher(z.art)+'</td>'+
-      '<td>'+htmlSicher(z.notiz)+'</td>'+
       '</tr>'
     ).join("");
 
@@ -1226,7 +1229,6 @@ tr{page-break-inside:avoid}
 th,td{border-bottom:1px solid #d6d6d6;padding:5px 6px;vertical-align:top}
 th{background:#eef3f7;text-align:left;font-weight:700}
 .num{text-align:right;white-space:nowrap}
-.note{width:31%}
 .footer{margin-top:10px;font-size:9px;color:#777}
 </style>
 </head>
@@ -1237,7 +1239,7 @@ th{background:#eef3f7;text-align:left;font-weight:700}
 <table>
 <thead>
 <tr>
-<th>Datum</th><th>Tag</th><th>Beginn</th><th>Ende</th><th>Stunden</th><th>Art</th><th class="note">Notiz</th>
+<th>Datum</th><th>Tag</th><th>Beginn</th><th>Ende</th><th>Stunden</th><th>Art</th>
 </tr>
 </thead>
 <tbody>${body}</tbody>
