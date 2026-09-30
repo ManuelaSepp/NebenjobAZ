@@ -106,12 +106,13 @@ details.card{padding:0;overflow:hidden}summary{padding:18px 20px;font-size:19px;
 </select>
 <p class="export-hint">Exportiert Datum, Zeiten, Stunden, Abwesenheit und Notiz – ohne Tätigkeiten.</p>
 <div class="export-row">
-  <button id="exportExcel" type="button" class="export-excel">Excel (CSV)</button>
+  <button id="exportExcel" type="button" class="export-excel">Excel (.xlsx)</button>
   <button id="exportPdf" type="button" class="export-pdf">PDF / Drucken</button>
 </div>
 </div></details>
 </main>
 <div id="calendarTooltip" class="calendar-tooltip" role="tooltip"></div>
-<script src="app.js?v=19"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="app.js?v=20"></script>
 <script>if("serviceWorker"in navigator){navigator.serviceWorker.register("./service-worker.js").catch(console.error)}</script>
 </body></html>
