@@ -278,20 +278,64 @@ function serverDatenUebernehmen(r,jahr){
   renderStatistik();
 }
 
-function mittwocheImMonat(jahr,monat){
-  let anzahl=0;
-  const ende=new Date(jahr,monat,0).getDate();
+function wochenMittwoch(d){
+  const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  const tag=x.getDay()||7;
+  x.setDate(x.getDate()+(3-tag));
+  return x;
+}
 
-  for(let tag=1;tag<=ende;tag++){
-    if(new Date(jahr,monat-1,tag).getDay()===3)anzahl++;
+function kontoDatumFuerTag(d){
+  const tag=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  const start=ausIso(state.startDatum||"2026-01-01");
+
+  if(tag<start)return null;
+
+  const mittwoch=wochenMittwoch(tag);
+
+  // Start mitten in einer Woche: noch kein Soll, geleistete Stunden zählen aber ab Start.
+  if(mittwoch<start)return new Date(start);
+
+  return mittwoch;
+}
+
+function kontoDatumFuerEintrag(e){
+  if(!e||!e.datum)return null;
+  return kontoDatumFuerTag(ausIso(e.datum));
+}
+
+function mittwocheImMonat(jahr,monat){
+  const start=ausIso(state.startDatum||"2026-01-01");
+  const erster=new Date(jahr,monat-1,1);
+  const letzter=new Date(jahr,monat,0);
+  const von=erster>start?erster:start;
+
+  if(von>letzter)return 0;
+
+  let anzahl=0;
+  for(let d=new Date(von);d<=letzter;d.setDate(d.getDate()+1)){
+    if(d.getDay()===3)anzahl++;
   }
 
   return anzahl;
 }
 
+function monatsKontoWerte(jahr,monat){
+  const haben=state.jahresEintraege
+    .filter(e=>{
+      const k=kontoDatumFuerEintrag(e);
+      return k&&k.getFullYear()===jahr&&k.getMonth()===monat-1;
+    })
+    .reduce((sum,e)=>sum+Number(e.anrechenbar||0),0);
+
+  const soll=mittwocheImMonat(jahr,monat)*state.soll;
+  return {soll,haben,saldo:haben-soll};
+}
+
 function monatLokalSetzen(jahr,monat,rendern=true){
   if(state.cacheJahr!==jahr)return false;
 
+  // Kalender zeigt weiterhin die tatsächlich gearbeiteten Kalendertage.
   state.eintraege=state.jahresEintraege
     .filter(e=>{
       const d=ausIso(e.datum);
@@ -299,12 +343,11 @@ function monatLokalSetzen(jahr,monat,rendern=true){
     })
     .sort((a,b)=>a.datum.localeCompare(b.datum));
 
-  state.monatSoll=mittwocheImMonat(jahr,monat)*state.soll;
-  state.monatHaben=state.eintraege.reduce(
-    (sum,e)=>sum+Number(e.anrechenbar||0),
-    0
-  );
-  state.monatSaldo=state.monatHaben-state.monatSoll;
+  // Zeitkonto ordnet die Stunden der Woche über deren Mittwoch zu.
+  const mw=monatsKontoWerte(jahr,monat);
+  state.monatSoll=mw.soll;
+  state.monatHaben=mw.haben;
+  state.monatSaldo=mw.saldo;
 
   if(rendern){
     renderKalender();
@@ -370,9 +413,9 @@ async function loeschen(){
 }
 
 function beitragFuerSaldo(e){
-  if(!e||!e.datum)return 0;
+  const k=kontoDatumFuerEintrag(e);
+  if(!k)return 0;
 
-  const d=ausIso(e.datum);
   const heute=new Date();
   const monatsEnde=new Date(
     heute.getFullYear(),
@@ -380,7 +423,7 @@ function beitragFuerSaldo(e){
     0
   );
 
-  if(d>monatsEnde)return 0;
+  if(k>monatsEnde)return 0;
 
   return Number(e.anrechenbar||0);
 }
@@ -401,34 +444,53 @@ function lokalerEintragAusPayload(payload){
 }
 
 function monatswerteLokalNeu(){
-  state.monatHaben=state.eintraege.reduce(
-    (sum,e)=>sum+Number(e.anrechenbar||0),
-    0
-  );
-  state.monatSaldo=state.monatHaben-state.monatSoll;
+  const jahr=state.kalenderDatum.getFullYear();
+  const monat=state.kalenderDatum.getMonth()+1;
+  const mw=monatsKontoWerte(jahr,monat);
+
+  state.monatSoll=mw.soll;
+  state.monatHaben=mw.haben;
+  state.monatSaldo=mw.saldo;
 }
 
 function lokalerStandNachAktion(action,payload,alt){
   const jahr=state.kalenderDatum.getFullYear();
   const monat=state.kalenderDatum.getMonth();
 
+  const cacheBetrifft=e=>{
+    if(!e)return false;
+    const d=ausIso(e.datum);
+    const k=kontoDatumFuerEintrag(e);
+    return state.cacheJahr===d.getFullYear() ||
+      (k&&state.cacheJahr===k.getFullYear());
+  };
+
+  const ausCacheEntfernen=e=>{
+    if(!e||!cacheBetrifft(e))return;
+    state.jahresEintraege=state.jahresEintraege.filter(
+      x=>x.datum!==e.datum
+    );
+  };
+
+  const inCacheAufnehmen=e=>{
+    if(!e||!cacheBetrifft(e))return;
+    state.jahresEintraege=state.jahresEintraege.filter(
+      x=>x.datum!==e.datum
+    );
+    state.jahresEintraege.push(e);
+    state.jahresEintraege.sort((a,b)=>a.datum.localeCompare(b.datum));
+  };
+
   if(action==="delete"){
     state.eintraege=state.eintraege.filter(
       e=>e.datum!==payload.datum
     );
-
-    if(
-      alt &&
-      state.cacheJahr===ausIso(alt.datum).getFullYear()
-    ){
-      state.jahresEintraege=state.jahresEintraege.filter(
-        e=>e.datum!==alt.datum
-      );
-    }
+    ausCacheEntfernen(alt);
 
     const altBeitrag=beitragFuerSaldo(alt);
+    const altKonto=kontoDatumFuerEintrag(alt);
 
-    if(alt&&ausIso(alt.datum).getFullYear()===state.saldoJahr){
+    if(altKonto&&altKonto.getFullYear()===state.saldoJahr){
       state.jahresSaldo-=altBeitrag;
     }
     state.saldo-=altBeitrag;
@@ -439,38 +501,29 @@ function lokalerStandNachAktion(action,payload,alt){
       state.eintraege=state.eintraege.filter(
         e=>e.datum!==alt.datum
       );
-
-      if(state.cacheJahr===ausIso(alt.datum).getFullYear()){
-        state.jahresEintraege=state.jahresEintraege.filter(
-          e=>e.datum!==alt.datum
-        );
-      }
-
-      if(state.cacheJahr===ausIso(neu.datum).getFullYear()){
-        state.jahresEintraege.push(neu);
-        state.jahresEintraege.sort((a,b)=>a.datum.localeCompare(b.datum));
-      }
+      ausCacheEntfernen(alt);
+      inCacheAufnehmen(neu);
 
       const altBeitrag=beitragFuerSaldo(alt);
       const neuBeitrag=beitragFuerSaldo(neu);
+      const altKonto=kontoDatumFuerEintrag(alt);
+      const neuKonto=kontoDatumFuerEintrag(neu);
 
-      if(ausIso(alt.datum).getFullYear()===state.saldoJahr){
+      if(altKonto&&altKonto.getFullYear()===state.saldoJahr){
         state.jahresSaldo-=altBeitrag;
       }
-      if(ausIso(neu.datum).getFullYear()===state.saldoJahr){
+      if(neuKonto&&neuKonto.getFullYear()===state.saldoJahr){
         state.jahresSaldo+=neuBeitrag;
       }
 
       state.saldo+=neuBeitrag-altBeitrag;
     }else{
-      if(state.cacheJahr===ausIso(neu.datum).getFullYear()){
-        state.jahresEintraege.push(neu);
-        state.jahresEintraege.sort((a,b)=>a.datum.localeCompare(b.datum));
-      }
+      inCacheAufnehmen(neu);
 
       const neuBeitrag=beitragFuerSaldo(neu);
+      const neuKonto=kontoDatumFuerEintrag(neu);
 
-      if(ausIso(neu.datum).getFullYear()===state.saldoJahr){
+      if(neuKonto&&neuKonto.getFullYear()===state.saldoJahr){
         state.jahresSaldo+=neuBeitrag;
       }
       state.saldo+=neuBeitrag;
@@ -478,6 +531,7 @@ function lokalerStandNachAktion(action,payload,alt){
 
     const nd=ausIso(neu.datum);
     if(nd.getFullYear()===jahr&&nd.getMonth()===monat){
+      state.eintraege=state.eintraege.filter(e=>e.datum!==neu.datum);
       state.eintraege.push(neu);
       state.eintraege.sort((a,b)=>a.datum.localeCompare(b.datum));
     }
@@ -757,8 +811,8 @@ function jahresZeitkonto(jahr){
 
   const haben=state.jahresEintraege
     .filter(e=>{
-      const d=ausIso(e.datum);
-      return d>=startImJahr&&d<=ende;
+      const k=kontoDatumFuerEintrag(e);
+      return k&&k>=startImJahr&&k<=ende;
     })
     .reduce((sum,e)=>sum+Number(e.anrechenbar||0),0);
 
@@ -769,28 +823,13 @@ function jahresZeitkonto(jahr){
 function monatsSaldoFuerUebersicht(jahr,monat){
   const heute=new Date();
   const start=ausIso(state.startDatum||"2026-01-01");
-  const monatsStart=new Date(jahr,monat-1,1);
   const monatsEnde=new Date(jahr,monat,0);
 
   if(monatsEnde<start)return null;
   if(jahr>heute.getFullYear())return null;
   if(jahr===heute.getFullYear()&&monat>heute.getMonth()+1)return null;
 
-  const wirksamerStart=start>monatsStart?start:monatsStart;
-
-  let mittwoche=0;
-  for(let d=new Date(wirksamerStart);d<=monatsEnde;d.setDate(d.getDate()+1)){
-    if(d.getDay()===3)mittwoche++;
-  }
-
-  const haben=state.jahresEintraege
-    .filter(e=>{
-      const d=ausIso(e.datum);
-      return d>=wirksamerStart&&d<=monatsEnde;
-    })
-    .reduce((sum,e)=>sum+Number(e.anrechenbar||0),0);
-
-  return haben-(mittwoche*state.soll);
+  return monatsKontoWerte(jahr,monat).saldo;
 }
 
 function wertSetzen(id,wert,mitVorzeichen=false){
@@ -889,36 +928,20 @@ function exportQuelle(jahr){
   if(state.cacheJahr===jahr && Array.isArray(state.jahresEintraege)){
     return state.jahresEintraege;
   }
-  return state.eintraege.filter(e=>ausIso(e.datum).getFullYear()===jahr);
+  return state.eintraege;
 }
 
 function monatsWerteFuerExport(jahr,monat){
-  const start=ausIso(state.startDatum||"2026-01-01");
-  const monatsStart=new Date(jahr,monat-1,1);
-  const monatsEnde=new Date(jahr,monat,0);
-
-  if(monatsEnde<start){
-    return {soll:0,haben:0,saldo:0,daten:[]};
-  }
-
-  const wirksamerStart=start>monatsStart?start:monatsStart;
-  let mittwoche=0;
-
-  for(let d=new Date(wirksamerStart);d<=monatsEnde;d.setDate(d.getDate()+1)){
-    if(d.getDay()===3)mittwoche++;
-  }
+  const mw=monatsKontoWerte(jahr,monat);
 
   const daten=exportQuelle(jahr)
     .filter(e=>{
-      const d=ausIso(e.datum);
-      return d>=wirksamerStart&&d<=monatsEnde;
+      const k=kontoDatumFuerEintrag(e);
+      return k&&k.getFullYear()===jahr&&k.getMonth()===monat-1;
     })
     .sort((a,b)=>a.datum.localeCompare(b.datum));
 
-  const haben=daten.reduce((sum,e)=>sum+Number(e.anrechenbar||0),0);
-  const soll=mittwoche*state.soll;
-
-  return {soll,haben,saldo:haben-soll,daten};
+  return {soll:mw.soll,haben:mw.haben,saldo:mw.saldo,daten};
 }
 
 function exportStartsaldo(){
@@ -977,13 +1000,12 @@ function exportKontext(){
   const heute=new Date();
   const bisMonat=jahr===heute.getFullYear()?heute.getMonth()+1:12;
   const standEnde=kontostandBisMonat(jahr,bisMonat);
-  const start=ausIso(state.startDatum||"2026-01-01");
+  const ende=new Date(jahr,bisMonat,0);
 
   const daten=exportQuelle(jahr)
     .filter(e=>{
-      const d=ausIso(e.datum);
-      const ende=new Date(jahr,bisMonat,0);
-      return d.getFullYear()===jahr && d>=start && d<=ende;
+      const k=kontoDatumFuerEintrag(e);
+      return k&&k.getFullYear()===jahr&&k<=ende;
     })
     .sort((a,b)=>a.datum.localeCompare(b.datum));
 
