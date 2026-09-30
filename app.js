@@ -1214,7 +1214,7 @@ function exportPdf(){
 <meta charset="UTF-8">
 <title>Arbeitszeitnachweis</title>
 <style>
-@page{size:A4 landscape;margin:11mm}
+@page{size:A4 portrait;margin:12mm}
 body{font-family:Arial,sans-serif;color:#222;margin:0}
 h1{font-size:20px;margin:0 0 4px}
 .meta{font-size:11px;color:#666;margin-bottom:14px}
@@ -1223,11 +1223,17 @@ h1{font-size:20px;margin:0 0 4px}
 .summary span{display:block;font-size:10px;color:#666;margin-bottom:2px}
 .summary strong{font-size:14px}
 .plus{color:#337a19}.minus{color:#b42318}
-table{width:100%;border-collapse:collapse;font-size:10px}
+table{width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed}
 thead{display:table-header-group}
 tr{page-break-inside:avoid}
 th,td{border-bottom:1px solid #d6d6d6;padding:5px 6px;vertical-align:top}
 th{background:#eef3f7;text-align:left;font-weight:700}
+th:nth-child(1),td:nth-child(1){width:22%}
+th:nth-child(2),td:nth-child(2){width:10%}
+th:nth-child(3),td:nth-child(3){width:17%}
+th:nth-child(4),td:nth-child(4){width:17%}
+th:nth-child(5),td:nth-child(5){width:14%}
+th:nth-child(6),td:nth-child(6){width:20%}
 .num{text-align:right;white-space:nowrap}
 .footer{margin-top:10px;font-size:9px;color:#777}
 </style>
