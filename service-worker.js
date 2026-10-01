@@ -1,4 +1,4 @@
-const CACHE_NAME = "nebenjob-az-v21";
+const CACHE_NAME = "nebenjob-az-v22";
 const APP_ASSETS = [
   "./",
   "./index.html",
@@ -51,3 +51,4 @@ self.addEventListener("fetch", event => {
       .catch(() => caches.match(event.request))
   );
 });
+

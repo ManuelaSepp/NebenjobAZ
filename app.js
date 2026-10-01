@@ -249,6 +249,10 @@ function serverDatenUebernehmen(r,jahr){
   state.saldoJahr=Number(r.saldoJahr)||jahr;
   state.startDatum=String(r.startDatum||state.startDatum||"2026-01-01");
 
+  if(r.startSaldo!==undefined && Number.isFinite(Number(r.startSaldo))){
+    state.startSaldo=Number(r.startSaldo);
+  }
+
   const startJahr=ausIso(state.startDatum).getFullYear();
   if(state.startSaldo===null && state.saldoJahr===startJahr){
     state.startSaldo=state.saldo-state.jahresSaldo;
@@ -304,10 +308,20 @@ function kontoDatumFuerEintrag(e){
   return kontoDatumFuerTag(ausIso(e.datum));
 }
 
+// Ganze laufende Woche berücksichtigen; Mittwoch ist nur der Zuordnungsschlüssel.
+function kontoStichtag(){
+  const heute=new Date();
+  const tag=new Date(heute.getFullYear(),heute.getMonth(),heute.getDate());
+  const mittwoch=wochenMittwoch(tag);
+  return mittwoch>tag?mittwoch:tag;
+}
+
 function mittwocheImMonat(jahr,monat){
   const start=ausIso(state.startDatum||"2026-01-01");
   const erster=new Date(jahr,monat-1,1);
-  const letzter=new Date(jahr,monat,0);
+  const monatsEnde=new Date(jahr,monat,0);
+  const stichtag=kontoStichtag();
+  const letzter=monatsEnde<stichtag?monatsEnde:stichtag;
   const von=erster>start?erster:start;
 
   if(von>letzter)return 0;
@@ -324,7 +338,7 @@ function monatsKontoWerte(jahr,monat){
   const haben=state.jahresEintraege
     .filter(e=>{
       const k=kontoDatumFuerEintrag(e);
-      return k&&k.getFullYear()===jahr&&k.getMonth()===monat-1;
+      return k&&k<=kontoStichtag()&&k.getFullYear()===jahr&&k.getMonth()===monat-1;
     })
     .reduce((sum,e)=>sum+Number(e.anrechenbar||0),0);
 
@@ -416,14 +430,7 @@ function beitragFuerSaldo(e){
   const k=kontoDatumFuerEintrag(e);
   if(!k)return 0;
 
-  const heute=new Date();
-  const monatsEnde=new Date(
-    heute.getFullYear(),
-    heute.getMonth()+1,
-    0
-  );
-
-  if(k>monatsEnde)return 0;
+  if(k>kontoStichtag())return 0;
 
   return Number(e.anrechenbar||0);
 }
@@ -788,19 +795,12 @@ function renderMonat(){
 }
 
 function jahresZeitkonto(jahr){
-  const heute=new Date();
   const start=ausIso(state.startDatum||"2026-01-01");
   const jahresStart=new Date(jahr,0,1);
   const startImJahr=start>jahresStart?start:jahresStart;
-
-  let ende;
-  if(jahr<heute.getFullYear()){
-    ende=new Date(jahr,11,31);
-  }else if(jahr===heute.getFullYear()){
-    ende=new Date(jahr,heute.getMonth()+1,0);
-  }else{
-    return {soll:0,haben:0,saldo:0};
-  }
+  const jahresEnde=new Date(jahr,11,31);
+  const stichtag=kontoStichtag();
+  const ende=jahresEnde<stichtag?jahresEnde:stichtag;
 
   if(startImJahr>ende)return {soll:0,haben:0,saldo:0};
 
@@ -826,8 +826,7 @@ function monatsSaldoFuerUebersicht(jahr,monat){
   const monatsEnde=new Date(jahr,monat,0);
 
   if(monatsEnde<start)return null;
-  if(jahr>heute.getFullYear())return null;
-  if(jahr===heute.getFullYear()&&monat>heute.getMonth()+1)return null;
+  if(new Date(jahr,monat-1,1)>kontoStichtag())return null;
 
   return monatsKontoWerte(jahr,monat).saldo;
 }
@@ -850,7 +849,6 @@ function renderStatistik(){
   wertSetzen("zkMonatSaldo",state.monatSaldo,true);
 
   $("zeitkontoJahrTitel").textContent="Jahr "+jahr;
-  wertSetzen("zkJahrSoll",jahrWerte.soll);
   wertSetzen("zkJahrHaben",jahrWerte.haben);
   wertSetzen("zkJahrSaldo",jahrWerte.saldo,true);
 
@@ -937,7 +935,7 @@ function monatsWerteFuerExport(jahr,monat){
   const daten=exportQuelle(jahr)
     .filter(e=>{
       const k=kontoDatumFuerEintrag(e);
-      return k&&k.getFullYear()===jahr&&k.getMonth()===monat-1;
+      return k&&k<=kontoStichtag()&&k.getFullYear()===jahr&&k.getMonth()===monat-1;
     })
     .sort((a,b)=>a.datum.localeCompare(b.datum));
 
@@ -998,9 +996,10 @@ function exportKontext(){
 
   const jw=jahresZeitkonto(jahr);
   const heute=new Date();
-  const bisMonat=jahr===heute.getFullYear()?heute.getMonth()+1:12;
+  const stichtag=kontoStichtag();
+  const bisMonat=jahr<stichtag.getFullYear()?12:jahr===stichtag.getFullYear()?stichtag.getMonth()+1:0;
   const standEnde=kontostandBisMonat(jahr,bisMonat);
-  const ende=new Date(jahr,bisMonat,0);
+  const ende=kontoStichtag();
 
   const daten=exportQuelle(jahr)
     .filter(e=>{
@@ -1071,7 +1070,6 @@ async function exportExcel(){
       ]
       :[
         ["Startsaldo Zeitkonto",x.startSaldo],
-        ["Soll",x.soll],
         ["Haben",x.haben],
         ["Jahressaldo",x.saldo],
         ["Gesamtsaldo inkl. Startsaldo",x.standEnde]
@@ -1144,7 +1142,8 @@ async function exportExcel(){
 
       let stand=x.startSaldo;
       const heute=new Date();
-      const maxMonat=x.jahr===heute.getFullYear()?heute.getMonth()+1:12;
+      const stichtag=kontoStichtag();
+      const maxMonat=x.jahr<stichtag.getFullYear()?12:x.jahr===stichtag.getFullYear()?stichtag.getMonth()+1:0;
 
       for(let m=1;m<=12;m++){
         if(m>maxMonat){
@@ -1211,7 +1210,6 @@ function exportPdf(){
       ]
       :[
         ["Startsaldo Zeitkonto",x.startSaldo],
-        ["Soll",x.soll],
         ["Haben",x.haben],
         ["Jahressaldo",x.saldo],
         ["Gesamtsaldo inkl. Startsaldo",x.standEnde]
@@ -1361,3 +1359,4 @@ function zeige(t,k){
   meldung.textContent=t;
   meldung.className=k||"";
 }
+
