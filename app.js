@@ -555,7 +555,8 @@ async function schreibenPerPost(action,payload){
   const body=new URLSearchParams({
     action:action,
     payload:JSON.stringify(payload),
-    zeit:String(Date.now())
+    zeit:String(Date.now()),
+    zugang:zugangLesen()
   });
 
   await fetch(SCRIPT_URL,{
@@ -1289,7 +1290,29 @@ window.addEventListener("load",()=>setTimeout(()=>window.print(),250));
   }
 }
 
-function jsonp(p){
+// Zugangsschutz: eigener Schlüssel dieser App, sonst der gemeinsame Schlüssel (von Jane, gleiche Adresse).
+// Als Funktionen deklariert, damit sie schon beim App-Start verfügbar sind.
+function zugangName(){return "nebenjobaz_zugang_v1"}
+function zugangLesen(){try{return localStorage.getItem(zugangName())||localStorage.getItem("jane_zugang_v1")||""}catch(_){return ""}}
+function zugangAbfragen(text){
+  const k=window.prompt(text,"");
+  if(!k||!k.trim())return false;
+  try{localStorage.setItem(zugangName(),k.trim())}catch(_){}
+  return true;
+}
+function zugangVerweigert(r){return !!(r&&r.ok===false&&r.zugang===false)}
+async function jsonp(p){
+  const gesendet=zugangLesen();
+  let r=await jsonpRoh({...p,zugang:gesendet});
+  if(zugangVerweigert(r)&&zugangLesen()!==gesendet)r=await jsonpRoh({...p,zugang:zugangLesen()});
+  if(zugangVerweigert(r)&&zugangAbfragen(gesendet?"Der gespeicherte Zugangsschlüssel passt nicht. Bitte den Schlüssel für diese App eingeben:":"Bitte einmalig den Zugangsschlüssel eingeben:")){
+    r=await jsonpRoh({...p,zugang:zugangLesen()});
+  }
+  if(zugangVerweigert(r))return {ok:false,zugang:false,message:"Kein Zugriff: Zugangsschlüssel fehlt oder ist falsch. Bitte Seite neu laden."};
+  return r;
+}
+
+function jsonpRoh(p){
   return new Promise((res,rej)=>{
     const cb="nebenjobCallback_"+Date.now()+"_"+(++jsonpSequenz);
     const s=document.createElement("script");

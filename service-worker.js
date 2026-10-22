@@ -1,8 +1,8 @@
-const CACHE_NAME = "nebenjob-az-v22";
+const CACHE_NAME = "nebenjob-az-v23";
 const APP_ASSETS = [
   "./",
   "./index.html",
-  "./app.js?v=21",
+  "./app.js?v=23",
   "./manifest.json",
   "./icons/favicon-32.png",
   "./icons/apple-touch-icon.png",
